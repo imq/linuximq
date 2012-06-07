@@ -1,0 +1,488 @@
+diff -urN iptables-1.2.6a-clean/extensions/.IMQ-test iptables-1.2.6a-imq/extensions/.IMQ-test
+--- iptables-1.2.6a-clean/extensions/.IMQ-test	Thu Jan  1 01:00:00 1970
++++ iptables-1.2.6a-imq/extensions/.IMQ-test	Mon Apr 29 01:34:33 2002
+@@ -0,0 +1,3 @@
++#!/bin/sh
++# True if IMQ target patch is applied.
++[ -f $KERNEL_DIR/net/ipv4/netfilter/ipt_IMQ.c ] && echo IMQ
+diff -urN iptables-1.2.6a-clean/extensions/.IMQ-test6 iptables-1.2.6a-imq/extensions/.IMQ-test6
+--- iptables-1.2.6a-clean/extensions/.IMQ-test6	Thu Jan  1 01:00:00 1970
++++ iptables-1.2.6a-imq/extensions/.IMQ-test6	Mon Apr 29 01:34:33 2002
+@@ -0,0 +1,3 @@
++#!/bin/sh
++# True if IMQ target patch is applied.
++[ -f $KERNEL_DIR/net/ipv6/netfilter/ip6t_IMQ.c ] && echo IMQ
+diff -urN iptables-1.2.6a-clean/extensions/libip6t_IMQ.c iptables-1.2.6a-imq/extensions/libip6t_IMQ.c
+--- iptables-1.2.6a-clean/extensions/libip6t_IMQ.c	Thu Jan  1 01:00:00 1970
++++ iptables-1.2.6a-imq/extensions/libip6t_IMQ.c	Mon Apr 29 01:34:33 2002
+@@ -0,0 +1,102 @@
++/* Shared library add-on to iptables to add IMQ target support. */
++#include <stdio.h>
++#include <string.h>
++#include <stdlib.h>
++#include <getopt.h>
++
++#include <ip6tables.h>
++#include <linux/netfilter_ipv6/ip6_tables.h>
++#include <linux/netfilter_ipv6/ip6t_IMQ.h>
++
++/* Function which prints out usage message. */
++static void
++help(void)
++{
++	printf(
++"IMQ target v%s options:\n"
++"  --todev <N>		enqueue to imq<N>, defaults to 0\n", 
++NETFILTER_VERSION);
++}
++
++static struct option opts[] = {
++	{ "todev", 1, 0, '1' },
++	{ 0 }
++};
++
++/* Initialize the target. */
++static void
++init(struct ip6t_entry_target *t, unsigned int *nfcache)
++{
++	struct ip6t_imq_info *mr = (struct ip6t_imq_info*)t->data;
++
++	mr->todev = 0;
++	*nfcache |= NFC_UNKNOWN;
++}
++
++/* Function which parses command options; returns true if it
++   ate an option */
++static int
++parse(int c, char **argv, int invert, unsigned int *flags,
++      const struct ip6t_entry *entry,
++      struct ip6t_entry_target **target)
++{
++	struct ip6t_imq_info *mr = (struct ip6t_imq_info*)(*target)->data;
++	
++	switch(c) {
++	case '1':
++		if (check_inverse(optarg, &invert, NULL, 0))
++			exit_error(PARAMETER_PROBLEM,
++				   "Unexpected `!' after --todev");
++		mr->todev=atoi(optarg);
++		break;
++	default:
++		return 0;
++	}
++	return 1;
++}
++
++static void
++final_check(unsigned int flags)
++{
++}
++
++/* Prints out the targinfo. */
++static void
++print(const struct ip6t_ip6 *ip,
++      const struct ip6t_entry_target *target,
++      int numeric)
++{
++	struct ip6t_imq_info *mr = (struct ip6t_imq_info*)target->data;
++
++	printf("IMQ: todev %u ", mr->todev);
++}
++
++/* Saves the union ipt_targinfo in parsable form to stdout. */
++static void
++save(const struct ip6t_ip6 *ip, const struct ip6t_entry_target *target)
++{
++	struct ip6t_imq_info *mr = (struct ip6t_imq_info*)target->data;
++
++	printf("--todev %u", mr->todev);
++}
++
++static
++struct ip6tables_target imq
++= { NULL,
++    "IMQ",
++    NETFILTER_VERSION,
++    IP6T_ALIGN(sizeof(struct ip6t_imq_info)),
++    IP6T_ALIGN(sizeof(struct ip6t_imq_info)),
++    &help,
++    &init,
++    &parse,
++    &final_check,
++    &print,
++    &save,
++    opts
++};
++
++void _init(void)
++{
++	register_target6(&imq);
++}
+diff -urN iptables-1.2.6a-clean/extensions/libipt_IMQ.c iptables-1.2.6a-imq/extensions/libipt_IMQ.c
+--- iptables-1.2.6a-clean/extensions/libipt_IMQ.c	Thu Jan  1 01:00:00 1970
++++ iptables-1.2.6a-imq/extensions/libipt_IMQ.c	Mon Apr 29 01:34:33 2002
+@@ -0,0 +1,102 @@
++/* Shared library add-on to iptables to add IMQ target support. */
++#include <stdio.h>
++#include <string.h>
++#include <stdlib.h>
++#include <getopt.h>
++
++#include <iptables.h>
++#include <linux/netfilter_ipv4/ip_tables.h>
++#include <linux/netfilter_ipv4/ipt_IMQ.h>
++
++/* Function which prints out usage message. */
++static void
++help(void)
++{
++	printf(
++"IMQ target v%s options:\n"
++"  --todev <N>		enqueue to imq<N>, defaults to 0\n", 
++NETFILTER_VERSION);
++}
++
++static struct option opts[] = {
++	{ "todev", 1, 0, '1' },
++	{ 0 }
++};
++
++/* Initialize the target. */
++static void
++init(struct ipt_entry_target *t, unsigned int *nfcache)
++{
++	struct ipt_imq_info *mr = (struct ipt_imq_info*)t->data;
++
++	mr->todev = 0;
++	*nfcache |= NFC_UNKNOWN;
++}
++
++/* Function which parses command options; returns true if it
++   ate an option */
++static int
++parse(int c, char **argv, int invert, unsigned int *flags,
++      const struct ipt_entry *entry,
++      struct ipt_entry_target **target)
++{
++	struct ipt_imq_info *mr = (struct ipt_imq_info*)(*target)->data;
++	
++	switch(c) {
++	case '1':
++		if (check_inverse(optarg, &invert, NULL, 0))
++			exit_error(PARAMETER_PROBLEM,
++				   "Unexpected `!' after --todev");
++		mr->todev=atoi(optarg);
++		break;
++	default:
++		return 0;
++	}
++	return 1;
++}
++
++static void
++final_check(unsigned int flags)
++{
++}
++
++/* Prints out the targinfo. */
++static void
++print(const struct ipt_ip *ip,
++      const struct ipt_entry_target *target,
++      int numeric)
++{
++	struct ipt_imq_info *mr = (struct ipt_imq_info*)target->data;
++
++	printf("IMQ: todev %u ", mr->todev);
++}
++
++/* Saves the union ipt_targinfo in parsable form to stdout. */
++static void
++save(const struct ipt_ip *ip, const struct ipt_entry_target *target)
++{
++	struct ipt_imq_info *mr = (struct ipt_imq_info*)target->data;
++
++	printf("--todev %u", mr->todev);
++}
++
++static
++struct iptables_target imq
++= { NULL,
++    "IMQ",
++    NETFILTER_VERSION,
++    IPT_ALIGN(sizeof(struct ipt_imq_info)),
++    IPT_ALIGN(sizeof(struct ipt_imq_info)),
++    &help,
++    &init,
++    &parse,
++    &final_check,
++    &print,
++    &save,
++    opts
++};
++
++void _init(void)
++{
++	register_target(&imq);
++}
+diff -urN iptables-1.2.6a-clean/patch-o-matic/extra/IMQ.patch iptables-1.2.6a-imq/patch-o-matic/extra/IMQ.patch
+--- iptables-1.2.6a-clean/patch-o-matic/extra/IMQ.patch	Thu Jan  1 01:00:00 1970
++++ iptables-1.2.6a-imq/patch-o-matic/extra/IMQ.patch	Mon Apr 29 01:34:33 2002
+@@ -0,0 +1,94 @@
++diff -urN linux-2.4.18-clean/include/linux/netfilter_ipv4/ipt_IMQ.h linux-2.4.18-imq-nf/include/linux/netfilter_ipv4/ipt_IMQ.h
++--- linux-2.4.18-clean/include/linux/netfilter_ipv4/ipt_IMQ.h	Thu Jan  1 01:00:00 1970
+++++ linux-2.4.18-imq-nf/include/linux/netfilter_ipv4/ipt_IMQ.h	Tue Apr  2 21:35:20 2002
++@@ -0,0 +1,8 @@
+++#ifndef _IPT_IMQ_H
+++#define _IPT_IMQ_H
+++
+++struct ipt_imq_info {
+++	unsigned int todev;	/* target imq device */
+++};
+++
+++#endif /* _IPT_IMQ_H */
++diff -urN linux-2.4.18-clean/net/ipv4/netfilter/ipt_IMQ.c linux-2.4.18-imq-nf/net/ipv4/netfilter/ipt_IMQ.c
++--- linux-2.4.18-clean/net/ipv4/netfilter/ipt_IMQ.c	Thu Jan  1 01:00:00 1970
+++++ linux-2.4.18-imq-nf/net/ipv4/netfilter/ipt_IMQ.c	Tue Apr  2 21:34:15 2002
++@@ -0,0 +1,78 @@
+++/* This target marks packets to be enqueued to an imq device */
+++#include <linux/module.h>
+++#include <linux/skbuff.h>
+++#include <linux/netfilter_ipv4/ip_tables.h>
+++#include <linux/netfilter_ipv4/ipt_IMQ.h>
+++#include <linux/imq.h>
+++
+++static unsigned int imq_target(struct sk_buff **pskb,
+++			       unsigned int hooknum,
+++			       const struct net_device *in,
+++			       const struct net_device *out,
+++			       const void *targinfo,
+++			       void *userinfo)
+++{
+++	struct ipt_imq_info *mr = (struct ipt_imq_info*)targinfo;
+++
+++	(*pskb)->imq_flags = mr->todev | IMQ_F_ENQUEUE;
+++	(*pskb)->nfcache |= NFC_ALTERED;
+++
+++	return IPT_CONTINUE;
+++}
+++
+++static int imq_checkentry(const char *tablename,
+++			  const struct ipt_entry *e,
+++			  void *targinfo,
+++			  unsigned int targinfosize,
+++			  unsigned int hook_mask)
+++{
+++	struct ipt_imq_info *mr;
+++
+++	if (targinfosize != IPT_ALIGN(sizeof(struct ipt_imq_info))) {
+++		printk(KERN_WARNING "IMQ: invalid targinfosize\n");
+++		return 0;
+++	}
+++	mr = (struct ipt_imq_info*)targinfo;
+++
+++	if (strcmp(tablename, "mangle") != 0) {
+++		printk(KERN_WARNING
+++		       "IMQ: IMQ can only be called from \"mangle\" table, not \"%s\"\n",
+++		       tablename);
+++		return 0;
+++	}
+++	
+++	if (mr->todev > IMQ_MAX_DEVS) {
+++		printk(KERN_WARNING
+++		       "IMQ: invalid device specified, highest is %u\n",
+++		       IMQ_MAX_DEVS);
+++		return 0;
+++	}
+++	
+++	return 1;
+++}
+++
+++static struct ipt_target ipt_imq_reg = {
+++	{ NULL, NULL},
+++	"IMQ",
+++	imq_target,
+++	imq_checkentry,
+++	NULL,
+++	THIS_MODULE
+++};
+++
+++static int __init init(void)
+++{
+++	if (ipt_register_target(&ipt_imq_reg))
+++		return -EINVAL;
+++
+++	return 0;
+++}
+++
+++static void __exit fini(void)
+++{
+++	ipt_unregister_target(&ipt_imq_reg);
+++}
+++
+++module_init(init);
+++module_exit(fini);
+++MODULE_LICENSE("GPL");
+diff -urN iptables-1.2.6a-clean/patch-o-matic/extra/IMQ.patch.config.in iptables-1.2.6a-imq/patch-o-matic/extra/IMQ.patch.config.in
+--- iptables-1.2.6a-clean/patch-o-matic/extra/IMQ.patch.config.in	Thu Jan  1 01:00:00 1970
++++ iptables-1.2.6a-imq/patch-o-matic/extra/IMQ.patch.config.in	Mon Apr 29 01:34:33 2002
+@@ -0,0 +1,2 @@
++    dep_tristate '    MARK target support' CONFIG_IP_NF_TARGET_MARK $CONFIG_IP_NF_MANGLE
++    dep_tristate '    IMQ target support' CONFIG_IP_NF_TARGET_IMQ $CONFIG_IP_NF_MANGLE
+diff -urN iptables-1.2.6a-clean/patch-o-matic/extra/IMQ.patch.configure.help iptables-1.2.6a-imq/patch-o-matic/extra/IMQ.patch.configure.help
+--- iptables-1.2.6a-clean/patch-o-matic/extra/IMQ.patch.configure.help	Thu Jan  1 01:00:00 1970
++++ iptables-1.2.6a-imq/patch-o-matic/extra/IMQ.patch.configure.help	Mon Apr 29 01:34:33 2002
+@@ -0,0 +1,8 @@
++CONFIG_IP_NF_TARGET_MARK
++IMQ target support
++CONFIG_IP_NF_TARGET_IMQ
++  This option adds a `IMQ' target which is used to specify if and
++  to which imq device packets should get enqueued/dequeued.
++
++  If you want to compile it as a module, say M here and read
++  <file:Documentation/modules.txt>.  If unsure, say `N'.
+diff -urN iptables-1.2.6a-clean/patch-o-matic/extra/IMQ.patch.help iptables-1.2.6a-imq/patch-o-matic/extra/IMQ.patch.help
+--- iptables-1.2.6a-clean/patch-o-matic/extra/IMQ.patch.help	Thu Jan  1 01:00:00 1970
++++ iptables-1.2.6a-imq/patch-o-matic/extra/IMQ.patch.help	Mon Apr 29 01:34:33 2002
+@@ -0,0 +1,5 @@
++Author: Patrick McHardy <kaber@trash.net>
++Status: Working
++
++  This patch adds a new target 'IMQ' which is required
++  to direct packets through an imq device.
+diff -urN iptables-1.2.6a-clean/patch-o-matic/extra/IMQ.patch.ipv6 iptables-1.2.6a-imq/patch-o-matic/extra/IMQ.patch.ipv6
+--- iptables-1.2.6a-clean/patch-o-matic/extra/IMQ.patch.ipv6	Thu Jan  1 01:00:00 1970
++++ iptables-1.2.6a-imq/patch-o-matic/extra/IMQ.patch.ipv6	Mon Apr 29 01:34:33 2002
+@@ -0,0 +1,94 @@
++diff -urN linux-2.4.18-clean/include/linux/netfilter_ipv6/ip6t_IMQ.h linux-2.4.18-imq/include/linux/netfilter_ipv6/ip6t_IMQ.h
++--- linux-2.4.18-clean/include/linux/netfilter_ipv6/ip6t_IMQ.h	Thu Jan  1 01:00:00 1970
+++++ linux-2.4.18-imq/include/linux/netfilter_ipv6/ip6t_IMQ.h	Sun Apr 28 23:34:53 2002
++@@ -0,0 +1,8 @@
+++#ifndef _IP6T_IMQ_H
+++#define _IP6T_IMQ_H
+++
+++struct ip6t_imq_info {
+++	unsigned int todev;	/* target imq device */
+++};
+++
+++#endif /* _IP6T_IMQ_H */
++diff -urN linux-2.4.18-clean/net/ipv6/netfilter/ip6t_IMQ.c linux-2.4.18-imq/net/ipv6/netfilter/ip6t_IMQ.c
++--- linux-2.4.18-clean/net/ipv6/netfilter/ip6t_IMQ.c	Thu Jan  1 01:00:00 1970
+++++ linux-2.4.18-imq/net/ipv6/netfilter/ip6t_IMQ.c	Sun Apr 28 23:34:11 2002
++@@ -0,0 +1,78 @@
+++/* This target marks packets to be enqueued to an imq device */
+++#include <linux/module.h>
+++#include <linux/skbuff.h>
+++#include <linux/netfilter_ipv6/ip6_tables.h>
+++#include <linux/netfilter_ipv6/ip6t_IMQ.h>
+++#include <linux/imq.h>
+++
+++static unsigned int imq_target(struct sk_buff **pskb,
+++			       unsigned int hooknum,
+++			       const struct net_device *in,
+++			       const struct net_device *out,
+++			       const void *targinfo,
+++			       void *userinfo)
+++{
+++	struct ip6t_imq_info *mr = (struct ip6t_imq_info*)targinfo;
+++
+++	(*pskb)->imq_flags = mr->todev | IMQ_F_ENQUEUE;
+++	(*pskb)->nfcache |= NFC_ALTERED;
+++
+++	return IP6T_CONTINUE;
+++}
+++
+++static int imq_checkentry(const char *tablename,
+++			  const struct ip6t_entry *e,
+++			  void *targinfo,
+++			  unsigned int targinfosize,
+++			  unsigned int hook_mask)
+++{
+++	struct ip6t_imq_info *mr;
+++
+++	if (targinfosize != IP6T_ALIGN(sizeof(struct ip6t_imq_info))) {
+++		printk(KERN_WARNING "IMQ: invalid targinfosize\n");
+++		return 0;
+++	}
+++	mr = (struct ip6t_imq_info*)targinfo;
+++
+++	if (strcmp(tablename, "mangle") != 0) {
+++		printk(KERN_WARNING
+++		       "IMQ: IMQ can only be called from \"mangle\" table, not \"%s\"\n",
+++		       tablename);
+++		return 0;
+++	}
+++	
+++	if (mr->todev > IMQ_MAX_DEVS) {
+++		printk(KERN_WARNING
+++		       "IMQ: invalid device specified, highest is %u\n",
+++		       IMQ_MAX_DEVS);
+++		return 0;
+++	}
+++	
+++	return 1;
+++}
+++
+++static struct ip6t_target ip6t_imq_reg = {
+++	{ NULL, NULL},
+++	"IMQ",
+++	imq_target,
+++	imq_checkentry,
+++	NULL,
+++	THIS_MODULE
+++};
+++
+++static int __init init(void)
+++{
+++	if (ip6t_register_target(&ip6t_imq_reg))
+++		return -EINVAL;
+++
+++	return 0;
+++}
+++
+++static void __exit fini(void)
+++{
+++	ip6t_unregister_target(&ip6t_imq_reg);
+++}
+++
+++module_init(init);
+++module_exit(fini);
+++MODULE_LICENSE("GPL");
+diff -urN iptables-1.2.6a-clean/patch-o-matic/extra/IMQ.patch.ipv6.config.in iptables-1.2.6a-imq/patch-o-matic/extra/IMQ.patch.ipv6.config.in
+--- iptables-1.2.6a-clean/patch-o-matic/extra/IMQ.patch.ipv6.config.in	Thu Jan  1 01:00:00 1970
++++ iptables-1.2.6a-imq/patch-o-matic/extra/IMQ.patch.ipv6.config.in	Mon Apr 29 01:34:33 2002
+@@ -0,0 +1,2 @@
++    dep_tristate '    MARK target support' CONFIG_IP6_NF_TARGET_MARK $CONFIG_IP6_NF_MANGLE
++    dep_tristate '    IMQ target support' CONFIG_IP6_NF_TARGET_IMQ $CONFIG_IP6_NF_MANGLE
+diff -urN iptables-1.2.6a-clean/patch-o-matic/extra/IMQ.patch.ipv6.configure.help iptables-1.2.6a-imq/patch-o-matic/extra/IMQ.patch.ipv6.configure.help
+--- iptables-1.2.6a-clean/patch-o-matic/extra/IMQ.patch.ipv6.configure.help	Thu Jan  1 01:00:00 1970
++++ iptables-1.2.6a-imq/patch-o-matic/extra/IMQ.patch.ipv6.configure.help	Mon Apr 29 01:34:33 2002
+@@ -0,0 +1,8 @@
++CONFIG_IP6_NF_TARGET_MARK
++IMQ target support
++CONFIG_IP6_NF_TARGET_IMQ
++  This option adds a `IMQ' target which is used to specify if and
++  to which imq device packets should get enqueued/dequeued.
++
++  If you want to compile it as a module, say M here and read
++  <file:Documentation/modules.txt>.  If unsure, say `N'.
+diff -urN iptables-1.2.6a-clean/patch-o-matic/extra/IMQ.patch.ipv6.help iptables-1.2.6a-imq/patch-o-matic/extra/IMQ.patch.ipv6.help
+--- iptables-1.2.6a-clean/patch-o-matic/extra/IMQ.patch.ipv6.help	Thu Jan  1 01:00:00 1970
++++ iptables-1.2.6a-imq/patch-o-matic/extra/IMQ.patch.ipv6.help	Mon Apr 29 01:34:33 2002
+@@ -0,0 +1,5 @@
++Author: Patrick McHardy <kaber@trash.net>
++Status: Working
++
++  This patch adds a new target 'IMQ' which is required
++  to direct packets through an imq device.
+diff -urN iptables-1.2.6a-clean/patch-o-matic/extra/IMQ.patch.ipv6.makefile iptables-1.2.6a-imq/patch-o-matic/extra/IMQ.patch.ipv6.makefile
+--- iptables-1.2.6a-clean/patch-o-matic/extra/IMQ.patch.ipv6.makefile	Thu Jan  1 01:00:00 1970
++++ iptables-1.2.6a-imq/patch-o-matic/extra/IMQ.patch.ipv6.makefile	Mon Apr 29 01:34:33 2002
+@@ -0,0 +1,2 @@
++obj-$(CONFIG_IP6_NF_TARGET_MARK) += ip6t_MARK.o
++obj-$(CONFIG_IP6_NF_TARGET_IMQ) += ip6t_IMQ.o
+diff -urN iptables-1.2.6a-clean/patch-o-matic/extra/IMQ.patch.makefile iptables-1.2.6a-imq/patch-o-matic/extra/IMQ.patch.makefile
+--- iptables-1.2.6a-clean/patch-o-matic/extra/IMQ.patch.makefile	Thu Jan  1 01:00:00 1970
++++ iptables-1.2.6a-imq/patch-o-matic/extra/IMQ.patch.makefile	Mon Apr 29 01:34:33 2002
+@@ -0,0 +1,2 @@
++obj-$(CONFIG_IP_NF_TARGET_MARK) += ipt_MARK.o
++obj-$(CONFIG_IP_NF_TARGET_IMQ) += ipt_IMQ.o
