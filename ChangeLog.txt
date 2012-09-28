@@ -1,6 +1,10 @@
 IMQ changelog:
 --------------
 
+2012/09/25:
+-----------
+		Minor change in net/netfilter/Makefile.
+		Patch for 3.3.x also works for 3.4.x 
 2012/03/19:
 -----------
 Jussi Kivilinna <jussi.kivilinna@mbnet.fi>:
