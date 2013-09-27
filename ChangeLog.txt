@@ -1,5 +1,9 @@
 IMQ changelog:
 --------------
+2013-09-24
+----------
+		Support Kernel 3.9.10
+
 2013-07-20
 ----------
 	 	Support Kernel 3.9.1. It should work on 3.9.x also. 
