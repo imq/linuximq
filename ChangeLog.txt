@@ -1,5 +1,8 @@
 IMQ changelog:
 --------------
+2013-10-06
+----------
+		Jussi Kivilinna support kernel 3.11.x
 2013-09-24
 ----------
 		Support Kernel 3.9.10
