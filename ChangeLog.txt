@@ -1,5 +1,12 @@
 IMQ changelog:
 --------------
+
+2014-01-21
+----------
+		Please don't use patch from 3.11.x on 3.12.4+ Kernels because you will get a warning message in the logs:
+
+		skbuff: IMQ: kfree_skb: skb->nf_queue_entry != NULL
+
 2013-10-06
 ----------
 		Jussi Kivilinna support kernel 3.11.x
