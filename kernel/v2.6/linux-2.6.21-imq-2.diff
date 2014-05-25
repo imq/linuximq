@@ -1,7 +1,151 @@
-diff -Naurw linux-2.6.23/drivers/net/imq.c linux-2.6.23.imq/drivers/net/imq.c
---- linux-2.6.23/drivers/net/imq.c	1969-12-31 21:00:00.000000000 -0300
-+++ linux-2.6.23.imq/drivers/net/imq.c	2007-10-01 09:59:23.000000000 -0300
-@@ -0,0 +1,400 @@
+diff -Nru linux-2.6.21.1-orig/drivers/net/Kconfig linux-2.6.21.1/drivers/net/Kconfig
+--- linux-2.6.21.1-orig/drivers/net/Kconfig	2007-04-27 21:49:26.000000000 +0000
++++ linux-2.6.21.1/drivers/net/Kconfig	2007-06-02 21:43:55.000000000 +0000
+@@ -96,6 +96,129 @@
+ 	  To compile this driver as a module, choose M here: the module
+ 	  will be called eql.  If unsure, say N.
+ 
++config IMQ
++	tristate "IMQ (intermediate queueing device) support"
++	depends on NETDEVICES && NETFILTER
++	---help---
++	  The IMQ device(s) is used as placeholder for QoS queueing
++	  disciplines. Every packet entering/leaving the IP stack can be
++	  directed through the IMQ device where it's enqueued/dequeued to the
++	  attached qdisc. This allows you to treat network devices as classes
++	  and distribute bandwidth among them. Iptables is used to specify
++	  through which IMQ device, if any, packets travel.
++
++	  More information at: http://www.linuximq.net/
++
++	  To compile this driver as a module, choose M here: the module
++	  will be called imq.  If unsure, say N.
++
++choice
++	prompt "IMQ behavior (PRE/POSTROUTING)"
++	depends on IMQ
++	default IMQ_BEHAVIOR_BA
++	help
++
++		This settings defines how IMQ behaves in respect to its
++		hooking in PREROUTING and POSTROUTING.
++
++		IMQ can work in any of the following ways:
++
++		    PREROUTING   |      POSTROUTING
++		-----------------|-------------------
++		#1  After NAT    |      After NAT
++		#2  After NAT    |      Before NAT
++		#3  Before NAT   |      After NAT
++		#4  Before NAT   |      Before NAT
++
++		The default behavior is to hook before NAT on PREROUTING
++		and after NAT on POSTROUTING (#3).
++
++		This settings are specially usefull when trying to use IMQ
++		to shape NATed clients.
++
++		More information can be found at: www.linuximq.net
++
++		If not sure leave the default settings alone.
++
++config IMQ_BEHAVIOR_AA
++	bool "IMQ AA"
++	help
++		This settings defines how IMQ behaves in respect to its
++		hooking in PREROUTING and POSTROUTING.
++
++		Choosing this option will make IMQ hook like this:
++
++		PREROUTING:   After NAT
++		POSTROUTING:  After NAT
++
++		More information can be found at: www.linuximq.net
++
++		If not sure leave the default settings alone.
++
++config IMQ_BEHAVIOR_AB
++	bool "IMQ AB"
++	help
++		This settings defines how IMQ behaves in respect to its
++		hooking in PREROUTING and POSTROUTING.
++
++		Choosing this option will make IMQ hook like this:
++
++		PREROUTING:   After NAT
++		POSTROUTING:  Before NAT
++
++		More information can be found at: www.linuximq.net
++
++		If not sure leave the default settings alone.
++
++config IMQ_BEHAVIOR_BA
++	bool "IMQ BA"
++	help
++		This settings defines how IMQ behaves in respect to its
++		hooking in PREROUTING and POSTROUTING.
++
++		Choosing this option will make IMQ hook like this:
++
++		PREROUTING:   Before NAT
++		POSTROUTING:  After NAT
++
++		More information can be found at: www.linuximq.net
++
++		If not sure leave the default settings alone.
++
++config IMQ_BEHAVIOR_BB
++	bool "IMQ BB"
++	help
++		This settings defines how IMQ behaves in respect to its
++		hooking in PREROUTING and POSTROUTING.
++
++		Choosing this option will make IMQ hook like this:
++
++		PREROUTING:   Before NAT
++		POSTROUTING:  Before NAT
++
++		More information can be found at: www.linuximq.net
++
++		If not sure leave the default settings alone.
++
++endchoice
++
++config IMQ_NUM_DEVS
++
++	int "Number of IMQ devices"
++	range 2 8
++	depends on IMQ
++	default "2"
++	help
++
++		This settings defines how many IMQ devices will be 
++		created.
++
++		The default value is 2.
++
++		More information can be found at: www.linuximq.net
++
++		If not sure leave the default settings alone.
++
+ config TUN
+ 	tristate "Universal TUN/TAP device driver support"
+ 	select CRC32
+diff -Nru linux-2.6.21.1-orig/drivers/net/Makefile linux-2.6.21.1/drivers/net/Makefile
+--- linux-2.6.21.1-orig/drivers/net/Makefile	2007-04-27 21:49:26.000000000 +0000
++++ linux-2.6.21.1/drivers/net/Makefile	2007-06-02 21:43:55.000000000 +0000
+@@ -124,6 +124,7 @@
+ obj-$(CONFIG_SLHC) += slhc.o
+ 
+ obj-$(CONFIG_DUMMY) += dummy.o
++obj-$(CONFIG_IMQ) += imq.o
+ obj-$(CONFIG_IFB) += ifb.o
+ obj-$(CONFIG_DE600) += de600.o
+ obj-$(CONFIG_DE620) += de620.o
+diff -Nru linux-2.6.21.1-orig/drivers/net/imq.c linux-2.6.21.1/drivers/net/imq.c
+--- linux-2.6.21.1-orig/drivers/net/imq.c	1970-01-01 00:00:00.000000000 +0000
++++ linux-2.6.21.1/drivers/net/imq.c	2007-06-02 21:43:55.000000000 +0000
+@@ -0,0 +1,402 @@
 +/*
 + *             Pseudo-driver for the intermediate queue device.
 + *
@@ -125,7 +269,7 @@ diff -Naurw linux-2.6.23/drivers/net/imq.c linux-2.6.23.imq/drivers/net/imq.c
 +#if defined(CONFIG_IMQ_NUM_DEVS)
 +static unsigned int numdevs = CONFIG_IMQ_NUM_DEVS;
 +#else
-+static unsigned int numdevs = 16;
++static unsigned int numdevs = 2;
 +#endif
 +
 +static struct net_device *imq_devs;
@@ -263,40 +407,41 @@ diff -Naurw linux-2.6.23/drivers/net/imq.c linux-2.6.23.imq/drivers/net/imq.c
 +err6:
 +	nf_unregister_hook(&imq_ingress_ipv6);
 +err5:
-+	nf_unregister_queue_handler(PF_INET6, &nfqh);
++	nf_unregister_queue_handler(PF_INET6);
 +err4:
-+	nf_unregister_hook(&imq_egress_ipv4);
++	nf_unregister_hook(&imq_egress_ipv6);
 +#endif
 +err3:
 +	nf_unregister_hook(&imq_ingress_ipv4);
 +err2:
-+	nf_unregister_queue_handler(PF_INET, &nfqh);
++	nf_unregister_queue_handler(PF_INET);
 +err1:
 +	return err;
 +}
 +
 +static void __exit imq_unhook(void)
 +{
++	nf_unregister_hook(&imq_ingress_ipv4);
++	nf_unregister_hook(&imq_egress_ipv4);
++	nf_unregister_queue_handler(PF_INET);
 +#if defined(CONFIG_IPV6) || defined (CONFIG_IPV6_MODULE)
 +	nf_unregister_hook(&imq_ingress_ipv6);
 +	nf_unregister_hook(&imq_egress_ipv6);
-+	nf_unregister_queue_handler(PF_INET6, &nfqh);
++	nf_unregister_queue_handler(PF_INET6);
 +#endif
-+	nf_unregister_hook(&imq_ingress_ipv4);
-+	nf_unregister_hook(&imq_egress_ipv4);
-+	nf_unregister_queue_handler(PF_INET, &nfqh);
 +}
 +
 +static int __init imq_dev_init(struct net_device *dev)
 +{
 +	dev->hard_start_xmit    = imq_dev_xmit;
 +	dev->type               = ARPHRD_VOID;
-+	dev->mtu                = 16000;
-+	dev->tx_queue_len       = 11000;
++	dev->mtu                = 1500;
++	dev->tx_queue_len       = 30;
 +	dev->flags              = IFF_NOARP;
-+	dev->priv = kzalloc(sizeof(struct net_device_stats), GFP_KERNEL);
++	dev->priv = kmalloc(sizeof(struct net_device_stats), GFP_KERNEL);
 +	if (dev->priv == NULL)
 +		return -ENOMEM;
++	memset(dev->priv, 0, sizeof(struct net_device_stats));
 +	dev->get_stats          = imq_get_stats;
 +
 +	return 0;
@@ -319,9 +464,10 @@ diff -Naurw linux-2.6.23/drivers/net/imq.c linux-2.6.23.imq/drivers/net/imq.c
 +		return -EINVAL;
 +	}
 +
-+	imq_devs = kzalloc(sizeof(struct net_device) * numdevs, GFP_KERNEL);
++	imq_devs = kmalloc(sizeof(struct net_device) * numdevs, GFP_KERNEL);
 +	if (!imq_devs)
 +		return -ENOMEM;
++	memset(imq_devs, 0, sizeof(struct net_device) * numdevs);
 +
 +	/* we start counting at zero */
 +	numdevs--;
@@ -397,158 +543,14 @@ diff -Naurw linux-2.6.23/drivers/net/imq.c linux-2.6.23.imq/drivers/net/imq.c
 +module_init(imq_init_module);
 +module_exit(imq_cleanup_module);
 +
-+module_param(numdevs, int, 16);
++module_param(numdevs, int, 0);
 +MODULE_PARM_DESC(numdevs, "number of IMQ devices (how many imq* devices will be created)");
 +MODULE_AUTHOR("http://www.linuximq.net");
 +MODULE_DESCRIPTION("Pseudo-driver for the intermediate queue device. See http://www.linuximq.net/ for more information.");
 +MODULE_LICENSE("GPL");
-diff -Naurw linux-2.6.23/drivers/net/Kconfig linux-2.6.23.imq/drivers/net/Kconfig
---- linux-2.6.23/drivers/net/Kconfig	2007-10-01 09:04:50.000000000 -0300
-+++ linux-2.6.23.imq/drivers/net/Kconfig	2007-10-01 09:55:14.000000000 -0300
-@@ -112,6 +112,129 @@
- 	  To compile this driver as a module, choose M here: the module
- 	  will be called eql.  If unsure, say N.
- 
-+config IMQ
-+	tristate "IMQ (intermediate queueing device) support"
-+	depends on NETDEVICES && NETFILTER
-+	---help---
-+	  The IMQ device(s) is used as placeholder for QoS queueing
-+	  disciplines. Every packet entering/leaving the IP stack can be
-+	  directed through the IMQ device where it's enqueued/dequeued to the
-+	  attached qdisc. This allows you to treat network devices as classes
-+	  and distribute bandwidth among them. Iptables is used to specify
-+	  through which IMQ device, if any, packets travel.
-+
-+	  More information at: http://www.linuximq.net/
-+
-+	  To compile this driver as a module, choose M here: the module
-+	  will be called imq.  If unsure, say N.
-+
-+choice
-+	prompt "IMQ behavior (PRE/POSTROUTING)"
-+	depends on IMQ
-+	default IMQ_BEHAVIOR_AB
-+	help
-+
-+		This settings defines how IMQ behaves in respect to its
-+		hooking in PREROUTING and POSTROUTING.
-+
-+		IMQ can work in any of the following ways:
-+
-+		    PREROUTING   |      POSTROUTING
-+		-----------------|-------------------
-+		#1  After NAT    |      After NAT
-+		#2  After NAT    |      Before NAT
-+		#3  Before NAT   |      After NAT
-+		#4  Before NAT   |      Before NAT
-+
-+		The default behavior is to hook before NAT on PREROUTING
-+		and after NAT on POSTROUTING (#3).
-+
-+		This settings are specially usefull when trying to use IMQ
-+		to shape NATed clients.
-+
-+		More information can be found at: www.linuximq.net
-+
-+		If not sure leave the default settings alone.
-+
-+config IMQ_BEHAVIOR_AA
-+	bool "IMQ AA"
-+	help
-+		This settings defines how IMQ behaves in respect to its
-+		hooking in PREROUTING and POSTROUTING.
-+
-+		Choosing this option will make IMQ hook like this:
-+
-+		PREROUTING:   After NAT
-+		POSTROUTING:  After NAT
-+
-+		More information can be found at: www.linuximq.net
-+
-+		If not sure leave the default settings alone.
-+
-+config IMQ_BEHAVIOR_AB
-+	bool "IMQ AB"
-+	help
-+		This settings defines how IMQ behaves in respect to its
-+		hooking in PREROUTING and POSTROUTING.
-+
-+		Choosing this option will make IMQ hook like this:
-+
-+		PREROUTING:   After NAT
-+		POSTROUTING:  Before NAT
-+
-+		More information can be found at: www.linuximq.net
-+
-+		If not sure leave the default settings alone.
-+
-+config IMQ_BEHAVIOR_BA
-+	bool "IMQ BA"
-+	help
-+		This settings defines how IMQ behaves in respect to its
-+		hooking in PREROUTING and POSTROUTING.
-+
-+		Choosing this option will make IMQ hook like this:
-+
-+		PREROUTING:   Before NAT
-+		POSTROUTING:  After NAT
-+
-+		More information can be found at: www.linuximq.net
-+
-+		If not sure leave the default settings alone.
-+
-+config IMQ_BEHAVIOR_BB
-+	bool "IMQ BB"
-+	help
-+		This settings defines how IMQ behaves in respect to its
-+		hooking in PREROUTING and POSTROUTING.
-+
-+		Choosing this option will make IMQ hook like this:
-+
-+		PREROUTING:   Before NAT
-+		POSTROUTING:  Before NAT
-+
-+		More information can be found at: www.linuximq.net
-+
-+		If not sure leave the default settings alone.
-+
-+endchoice
-+
-+config IMQ_NUM_DEVS
-+
-+	int "Number of IMQ devices"
-+	range 2 16
-+	depends on IMQ
-+	default "16"
-+	help
-+
-+		This settings defines how many IMQ devices will be
-+		created.
-+
-+		The default value is 16.
-+
-+		More information can be found at: www.linuximq.net
-+
-+		If not sure leave the default settings alone.
-+
- config TUN
- 	tristate "Universal TUN/TAP device driver support"
- 	select CRC32
-diff -Naurw linux-2.6.23/drivers/net/Makefile linux-2.6.23.imq/drivers/net/Makefile
---- linux-2.6.23/drivers/net/Makefile	2007-10-01 09:04:50.000000000 -0300
-+++ linux-2.6.23.imq/drivers/net/Makefile	2007-10-01 09:55:14.000000000 -0300
-@@ -131,6 +131,7 @@
- obj-$(CONFIG_XEN_NETDEV_FRONTEND) += xen-netfront.o
- 
- obj-$(CONFIG_DUMMY) += dummy.o
-+obj-$(CONFIG_IMQ) += imq.o
- obj-$(CONFIG_IFB) += ifb.o
- obj-$(CONFIG_MACVLAN) += macvlan.o
- obj-$(CONFIG_DE600) += de600.o
-diff -Naurw linux-2.6.23/include/linux/imq.h linux-2.6.23.imq/include/linux/imq.h
---- linux-2.6.23/include/linux/imq.h	1969-12-31 21:00:00.000000000 -0300
-+++ linux-2.6.23.imq/include/linux/imq.h	2007-10-01 09:55:14.000000000 -0300
+diff -Nru linux-2.6.21.1-orig/include/linux/imq.h linux-2.6.21.1/include/linux/imq.h
+--- linux-2.6.21.1-orig/include/linux/imq.h	1970-01-01 00:00:00.000000000 +0000
++++ linux-2.6.21.1/include/linux/imq.h	2007-06-02 21:43:55.000000000 +0000
 @@ -0,0 +1,9 @@
 +#ifndef _IMQ_H
 +#define _IMQ_H
@@ -559,9 +561,9 @@ diff -Naurw linux-2.6.23/include/linux/imq.h linux-2.6.23.imq/include/linux/imq.
 +#define IMQ_F_ENQUEUE  0x80
 +
 +#endif /* _IMQ_H */
-diff -Naurw linux-2.6.23/include/linux/netfilter_ipv4/ipt_IMQ.h linux-2.6.23.imq/include/linux/netfilter_ipv4/ipt_IMQ.h
---- linux-2.6.23/include/linux/netfilter_ipv4/ipt_IMQ.h	1969-12-31 21:00:00.000000000 -0300
-+++ linux-2.6.23.imq/include/linux/netfilter_ipv4/ipt_IMQ.h	2007-10-01 09:55:14.000000000 -0300
+diff -Nru linux-2.6.21.1-orig/include/linux/netfilter_ipv4/ipt_IMQ.h linux-2.6.21.1/include/linux/netfilter_ipv4/ipt_IMQ.h
+--- linux-2.6.21.1-orig/include/linux/netfilter_ipv4/ipt_IMQ.h	1970-01-01 00:00:00.000000000 +0000
++++ linux-2.6.21.1/include/linux/netfilter_ipv4/ipt_IMQ.h	2007-06-02 21:43:55.000000000 +0000
 @@ -0,0 +1,8 @@
 +#ifndef _IPT_IMQ_H
 +#define _IPT_IMQ_H
@@ -571,9 +573,9 @@ diff -Naurw linux-2.6.23/include/linux/netfilter_ipv4/ipt_IMQ.h linux-2.6.23.imq
 +};
 +
 +#endif /* _IPT_IMQ_H */
-diff -Naurw linux-2.6.23/include/linux/netfilter_ipv6/ip6t_IMQ.h linux-2.6.23.imq/include/linux/netfilter_ipv6/ip6t_IMQ.h
---- linux-2.6.23/include/linux/netfilter_ipv6/ip6t_IMQ.h	1969-12-31 21:00:00.000000000 -0300
-+++ linux-2.6.23.imq/include/linux/netfilter_ipv6/ip6t_IMQ.h	2007-10-01 09:55:14.000000000 -0300
+diff -Nru linux-2.6.21.1-orig/include/linux/netfilter_ipv6/ip6t_IMQ.h linux-2.6.21.1/include/linux/netfilter_ipv6/ip6t_IMQ.h
+--- linux-2.6.21.1-orig/include/linux/netfilter_ipv6/ip6t_IMQ.h	1970-01-01 00:00:00.000000000 +0000
++++ linux-2.6.21.1/include/linux/netfilter_ipv6/ip6t_IMQ.h	2007-06-02 21:43:55.000000000 +0000
 @@ -0,0 +1,8 @@
 +#ifndef _IP6T_IMQ_H
 +#define _IP6T_IMQ_H
@@ -583,11 +585,11 @@ diff -Naurw linux-2.6.23/include/linux/netfilter_ipv6/ip6t_IMQ.h linux-2.6.23.im
 +};
 +
 +#endif /* _IP6T_IMQ_H */
-diff -Naurw linux-2.6.23/include/linux/skbuff.h linux-2.6.23.imq/include/linux/skbuff.h
---- linux-2.6.23/include/linux/skbuff.h	2007-10-01 09:05:08.000000000 -0300
-+++ linux-2.6.23.imq/include/linux/skbuff.h	2007-10-01 09:55:14.000000000 -0300
-@@ -296,6 +296,10 @@
- 	struct nf_conntrack	*nfct;
+diff -Nru linux-2.6.21.1-orig/include/linux/skbuff.h linux-2.6.21.1/include/linux/skbuff.h
+--- linux-2.6.21.1-orig/include/linux/skbuff.h	2007-04-27 21:49:26.000000000 +0000
++++ linux-2.6.21.1/include/linux/skbuff.h	2007-06-02 21:43:55.000000000 +0000
+@@ -294,6 +294,10 @@
+ #if defined(CONFIG_NF_CONNTRACK) || defined(CONFIG_NF_CONNTRACK_MODULE)
  	struct sk_buff		*nfct_reasm;
  #endif
 +#if defined(CONFIG_IMQ) || defined(CONFIG_IMQ_MODULE)
@@ -597,47 +599,42 @@ diff -Naurw linux-2.6.23/include/linux/skbuff.h linux-2.6.23.imq/include/linux/s
  #ifdef CONFIG_BRIDGE_NETFILTER
  	struct nf_bridge_info	*nf_bridge;
  #endif
-@@ -1726,6 +1730,10 @@
- 	dst->nfct_reasm = src->nfct_reasm;
- 	nf_conntrack_get_reasm(src->nfct_reasm);
- #endif
-+#if defined(CONFIG_IMQ) || defined(CONFIG_IMQ_MODULE)
-+	dst->imq_flags = src->imq_flags;
-+	dst->nf_info = src->nf_info;
-+#endif
- #ifdef CONFIG_BRIDGE_NETFILTER
- 	dst->nf_bridge  = src->nf_bridge;
- 	nf_bridge_get(src->nf_bridge);
-diff -Naurw linux-2.6.23/net/core/dev.c linux-2.6.23.imq/net/core/dev.c
---- linux-2.6.23/net/core/dev.c	2007-10-01 09:05:10.000000000 -0300
-+++ linux-2.6.23.imq/net/core/dev.c	2007-10-01 09:55:14.000000000 -0300
-@@ -94,6 +94,9 @@
- #include <linux/skbuff.h>
- #include <net/sock.h>
- #include <linux/rtnetlink.h>
-+#if defined(CONFIG_IMQ) || defined(CONFIG_IMQ_MODULE)
-+#include <linux/imq.h>
-+#endif
- #include <linux/proc_fs.h>
- #include <linux/seq_file.h>
- #include <linux/stat.h>
-@@ -1462,7 +1465,11 @@
- int dev_hard_start_xmit(struct sk_buff *skb, struct net_device *dev)
- {
- 	if (likely(!skb->next)) {
--		if (!list_empty(&ptype_all))
-+		if (!list_empty(&ptype_all)
-+#if defined(CONFIG_IMQ) || defined(CONFIG_IMQ_MODULE)
-+		    && !(skb->imq_flags & IMQ_F_ENQUEUE)
-+#endif
-+		    )
- 			dev_queue_xmit_nit(skb, dev);
+diff -Nru linux-2.6.21.1-orig/net/ipv4/netfilter/Kconfig linux-2.6.21.1/net/ipv4/netfilter/Kconfig
+--- linux-2.6.21.1-orig/net/ipv4/netfilter/Kconfig	2007-04-27 21:49:26.000000000 +0000
++++ linux-2.6.21.1/net/ipv4/netfilter/Kconfig	2007-06-02 21:43:55.000000000 +0000
+@@ -565,6 +565,17 @@
  
- 		if (netif_needs_gso(dev, skb)) {
-diff -Naurw linux-2.6.23/net/ipv4/netfilter/ipt_IMQ.c linux-2.6.23.imq/net/ipv4/netfilter/ipt_IMQ.c
---- linux-2.6.23/net/ipv4/netfilter/ipt_IMQ.c	1969-12-31 21:00:00.000000000 -0300
-+++ linux-2.6.23.imq/net/ipv4/netfilter/ipt_IMQ.c	2007-10-01 09:55:14.000000000 -0300
-@@ -0,0 +1,69 @@
+ 	  To compile it as a module, choose M here.  If unsure, say N.
+ 
++config IP_NF_TARGET_IMQ
++       tristate "IMQ target support"
++       depends on IP_NF_MANGLE
++       help
++         This option adds a `IMQ' target which is used to specify if and
++         to which IMQ device packets should get enqueued/dequeued.
++
++	 For more information visit: http://www.linuximq.net/
++
++         To compile it as a module, choose M here.  If unsure, say N.
++
+ config IP_NF_TARGET_TOS
+ 	tristate "TOS target support"
+ 	depends on IP_NF_MANGLE
+diff -Nru linux-2.6.21.1-orig/net/ipv4/netfilter/Makefile linux-2.6.21.1/net/ipv4/netfilter/Makefile
+--- linux-2.6.21.1-orig/net/ipv4/netfilter/Makefile	2007-04-27 21:49:26.000000000 +0000
++++ linux-2.6.21.1/net/ipv4/netfilter/Makefile	2007-06-02 21:43:55.000000000 +0000
+@@ -96,6 +96,7 @@
+ obj-$(CONFIG_IP_NF_TARGET_REJECT) += ipt_REJECT.o
+ obj-$(CONFIG_IP_NF_TARGET_TOS) += ipt_TOS.o
+ obj-$(CONFIG_IP_NF_TARGET_ECN) += ipt_ECN.o
++obj-$(CONFIG_IP_NF_TARGET_IMQ) += ipt_IMQ.o
+ obj-$(CONFIG_IP_NF_TARGET_MASQUERADE) += ipt_MASQUERADE.o
+ obj-$(CONFIG_IP_NF_TARGET_REDIRECT) += ipt_REDIRECT.o
+ obj-$(CONFIG_IP_NF_TARGET_NETMAP) += ipt_NETMAP.o
+diff -Nru linux-2.6.21.1-orig/net/ipv4/netfilter/ipt_IMQ.c linux-2.6.21.1/net/ipv4/netfilter/ipt_IMQ.c
+--- linux-2.6.21.1-orig/net/ipv4/netfilter/ipt_IMQ.c	1970-01-01 00:00:00.000000000 +0000
++++ linux-2.6.21.1/net/ipv4/netfilter/ipt_IMQ.c	2007-06-02 21:44:24.000000000 +0000
+@@ -0,0 +1,70 @@
 +/*
 + * This target marks packets to be enqueued to an imq device
 + */
@@ -661,7 +658,7 @@ diff -Naurw linux-2.6.23/net/ipv4/netfilter/ipt_IMQ.c linux-2.6.23.imq/net/ipv4/
 +	return XT_CONTINUE;
 +}
 +
-+static bool imq_checkentry(const char *tablename,
++static int imq_checkentry(const char *tablename,
 +			  const void *e,
 +			  const struct xt_target *target,
 +			  void *targinfo,
@@ -707,42 +704,42 @@ diff -Naurw linux-2.6.23/net/ipv4/netfilter/ipt_IMQ.c linux-2.6.23.imq/net/ipv4/
 +MODULE_AUTHOR("http://www.linuximq.net");
 +MODULE_DESCRIPTION("Pseudo-driver for the intermediate queue device. See http://www.linuximq.net/ for more information.");
 +MODULE_LICENSE("GPL");
-diff -Naurw linux-2.6.23/net/ipv4/netfilter/Kconfig linux-2.6.23.imq/net/ipv4/netfilter/Kconfig
---- linux-2.6.23/net/ipv4/netfilter/Kconfig	2007-10-01 09:05:12.000000000 -0300
-+++ linux-2.6.23.imq/net/ipv4/netfilter/Kconfig	2007-10-01 09:55:14.000000000 -0300
-@@ -311,6 +311,17 @@
++
+Binary files linux-2.6.21.1-orig/net/ipv6/netfilter/.ip6t_IMQ.swp and linux-2.6.21.1/net/ipv6/netfilter/.ip6t_IMQ.swp differ
+diff -Nru linux-2.6.21.1-orig/net/ipv6/netfilter/Kconfig linux-2.6.21.1/net/ipv6/netfilter/Kconfig
+--- linux-2.6.21.1-orig/net/ipv6/netfilter/Kconfig	2007-04-27 21:49:26.000000000 +0000
++++ linux-2.6.21.1/net/ipv6/netfilter/Kconfig	2007-06-02 21:43:55.000000000 +0000
+@@ -173,6 +173,15 @@
  
  	  To compile it as a module, choose M here.  If unsure, say N.
  
-+config IP_NF_TARGET_IMQ
-+       tristate "IMQ target support"
-+       depends on IP_NF_MANGLE
-+       help
-+         This option adds a `IMQ' target which is used to specify if and
-+         to which IMQ device packets should get enqueued/dequeued.
++config IP6_NF_TARGET_IMQ
++	tristate "IMQ target support"
++	depends on IP6_NF_MANGLE
++	help
++          This option adds a `IMQ' target which is used to specify if and
++          to which imq device packets should get enqueued/dequeued.
 +
-+	 For more information visit: http://www.linuximq.net/
++          To compile it as a module, choose M here.  If unsure, say N.
 +
-+         To compile it as a module, choose M here.  If unsure, say N.
-+
- config IP_NF_TARGET_TOS
- 	tristate "TOS target support"
- 	depends on IP_NF_MANGLE
-diff -Naurw linux-2.6.23/net/ipv4/netfilter/Makefile linux-2.6.23.imq/net/ipv4/netfilter/Makefile
---- linux-2.6.23/net/ipv4/netfilter/Makefile	2007-10-01 09:03:13.000000000 -0300
-+++ linux-2.6.23.imq/net/ipv4/netfilter/Makefile	2007-10-01 09:55:14.000000000 -0300
-@@ -54,6 +54,7 @@
- obj-$(CONFIG_IP_NF_TARGET_REJECT) += ipt_REJECT.o
- obj-$(CONFIG_IP_NF_TARGET_TOS) += ipt_TOS.o
- obj-$(CONFIG_IP_NF_TARGET_ECN) += ipt_ECN.o
-+obj-$(CONFIG_IP_NF_TARGET_IMQ) += ipt_IMQ.o
- obj-$(CONFIG_IP_NF_TARGET_MASQUERADE) += ipt_MASQUERADE.o
- obj-$(CONFIG_IP_NF_TARGET_REDIRECT) += ipt_REDIRECT.o
- obj-$(CONFIG_IP_NF_TARGET_NETMAP) += ipt_NETMAP.o
-diff -Naurw linux-2.6.23/net/ipv6/netfilter/ip6t_IMQ.c linux-2.6.23.imq/net/ipv6/netfilter/ip6t_IMQ.c
---- linux-2.6.23/net/ipv6/netfilter/ip6t_IMQ.c	1969-12-31 21:00:00.000000000 -0300
-+++ linux-2.6.23.imq/net/ipv6/netfilter/ip6t_IMQ.c	2007-10-01 09:55:14.000000000 -0300
-@@ -0,0 +1,69 @@
+ config IP6_NF_TARGET_HL
+ 	tristate  'HL (hoplimit) target support'
+ 	depends on IP6_NF_MANGLE
+diff -Nru linux-2.6.21.1-orig/net/ipv6/netfilter/Makefile linux-2.6.21.1/net/ipv6/netfilter/Makefile
+--- linux-2.6.21.1-orig/net/ipv6/netfilter/Makefile	2007-04-27 21:49:26.000000000 +0000
++++ linux-2.6.21.1/net/ipv6/netfilter/Makefile	2007-06-02 21:43:55.000000000 +0000
+@@ -13,6 +13,7 @@
+ obj-$(CONFIG_IP6_NF_MATCH_OWNER) += ip6t_owner.o
+ obj-$(CONFIG_IP6_NF_FILTER) += ip6table_filter.o
+ obj-$(CONFIG_IP6_NF_MANGLE) += ip6table_mangle.o
++obj-$(CONFIG_IP6_NF_TARGET_IMQ) += ip6t_IMQ.o
+ obj-$(CONFIG_IP6_NF_TARGET_HL) += ip6t_HL.o
+ obj-$(CONFIG_IP6_NF_QUEUE) += ip6_queue.o
+ obj-$(CONFIG_IP6_NF_TARGET_LOG) += ip6t_LOG.o
+diff -Nru linux-2.6.21.1-orig/net/ipv6/netfilter/ip6t_IMQ.c linux-2.6.21.1/net/ipv6/netfilter/ip6t_IMQ.c
+--- linux-2.6.21.1-orig/net/ipv6/netfilter/ip6t_IMQ.c	1970-01-01 00:00:00.000000000 +0000
++++ linux-2.6.21.1/net/ipv6/netfilter/ip6t_IMQ.c	2007-06-02 21:45:36.000000000 +0000
+@@ -0,0 +1,70 @@
 +/*
 + * This target marks packets to be enqueued to an imq device
 + */
@@ -766,7 +763,7 @@ diff -Naurw linux-2.6.23/net/ipv6/netfilter/ip6t_IMQ.c linux-2.6.23.imq/net/ipv6
 +	return XT_CONTINUE;
 +}
 +
-+static bool imq_checkentry(const char *tablename,
++static int imq_checkentry(const char *tablename,
 +			  const void *entry,
 +			  const struct xt_target *target,
 +			  void *targinfo,
@@ -788,7 +785,7 @@ diff -Naurw linux-2.6.23/net/ipv6/netfilter/ip6t_IMQ.c linux-2.6.23.imq/net/ipv6
 +
 +static struct xt_target ip6t_imq_reg = {
 +	.name           = "IMQ",
-+	.family		= AF_INET6,
++	.family         = AF_INET6,
 +	.target         = imq_target,
 +	.targetsize	= sizeof(struct ip6t_imq_info),
 +	.table		= "mangle",
@@ -812,41 +809,20 @@ diff -Naurw linux-2.6.23/net/ipv6/netfilter/ip6t_IMQ.c linux-2.6.23.imq/net/ipv6
 +MODULE_AUTHOR("http://www.linuximq.net");
 +MODULE_DESCRIPTION("Pseudo-driver for the intermediate queue device. See https://github.com/imq/linuximq/wiki for more information.");
 +MODULE_LICENSE("GPL");
-diff -Naurw linux-2.6.23/net/ipv6/netfilter/Kconfig linux-2.6.23.imq/net/ipv6/netfilter/Kconfig
---- linux-2.6.23/net/ipv6/netfilter/Kconfig	2007-10-01 09:03:12.000000000 -0300
-+++ linux-2.6.23.imq/net/ipv6/netfilter/Kconfig	2007-10-01 09:55:14.000000000 -0300
-@@ -173,6 +173,15 @@
- 
- 	  To compile it as a module, choose M here.  If unsure, say N.
- 
-+config IP6_NF_TARGET_IMQ
-+	tristate "IMQ target support"
-+	depends on IP6_NF_MANGLE
-+	help
-+          This option adds a `IMQ' target which is used to specify if and
-+          to which imq device packets should get enqueued/dequeued.
 +
-+          To compile it as a module, choose M here.  If unsure, say N.
-+
- config IP6_NF_TARGET_HL
- 	tristate  'HL (hoplimit) target support'
- 	depends on IP6_NF_MANGLE
-diff -Naurw linux-2.6.23/net/ipv6/netfilter/Makefile linux-2.6.23.imq/net/ipv6/netfilter/Makefile
---- linux-2.6.23/net/ipv6/netfilter/Makefile	2007-10-01 09:03:12.000000000 -0300
-+++ linux-2.6.23.imq/net/ipv6/netfilter/Makefile	2007-10-01 09:55:14.000000000 -0300
-@@ -13,6 +13,7 @@
- obj-$(CONFIG_IP6_NF_MATCH_OWNER) += ip6t_owner.o
- obj-$(CONFIG_IP6_NF_FILTER) += ip6table_filter.o
- obj-$(CONFIG_IP6_NF_MANGLE) += ip6table_mangle.o
-+obj-$(CONFIG_IP6_NF_TARGET_IMQ) += ip6t_IMQ.o
- obj-$(CONFIG_IP6_NF_TARGET_HL) += ip6t_HL.o
- obj-$(CONFIG_IP6_NF_QUEUE) += ip6_queue.o
- obj-$(CONFIG_IP6_NF_TARGET_LOG) += ip6t_LOG.o
-diff -Naurw linux-2.6.23/net/sched/sch_generic.c linux-2.6.23.imq/net/sched/sch_generic.c
---- linux-2.6.23/net/sched/sch_generic.c	2007-10-01 09:05:14.000000000 -0300
-+++ linux-2.6.23.imq/net/sched/sch_generic.c	2007-10-01 09:55:14.000000000 -0300
-@@ -190,6 +190,11 @@
- 	return ret;
+diff -Nru linux-2.6.21.1-orig/net/sched/sch_generic.c linux-2.6.21.1/net/sched/sch_generic.c
+--- linux-2.6.21.1-orig/net/sched/sch_generic.c	2007-04-27 21:49:26.000000000 +0000
++++ linux-2.6.21.1/net/sched/sch_generic.c	2007-06-02 21:43:55.000000000 +0000
+@@ -87,7 +87,6 @@
+ 
+    NOTE: Called under dev->queue_lock with locally disabled BH.
+ */
+-
+ static inline int qdisc_restart(struct net_device *dev)
+ {
+ 	struct Qdisc *q = dev->qdisc;
+@@ -181,6 +180,11 @@
+ 	return q->q.qlen;
  }
  
 +int qdisc_restart1(struct net_device *dev)
@@ -856,8 +832,8 @@ diff -Naurw linux-2.6.23/net/sched/sch_generic.c linux-2.6.23.imq/net/sched/sch_
 +
  void __qdisc_run(struct net_device *dev)
  {
- 	do {
-@@ -619,3 +624,4 @@
+ 	if (unlikely(dev->qdisc == &noop_qdisc))
+@@ -617,3 +621,4 @@
  EXPORT_SYMBOL(qdisc_reset);
  EXPORT_SYMBOL(qdisc_lock_tree);
  EXPORT_SYMBOL(qdisc_unlock_tree);

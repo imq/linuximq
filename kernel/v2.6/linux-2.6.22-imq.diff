@@ -812,7 +812,7 @@ diff -urN linux-2.6.22.1/net/ipv6/netfilter/ip6t_IMQ.c linux-2.6.22.1+imq1/net/i
 +module_exit(fini);
 +
 +MODULE_AUTHOR("http://www.linuximq.net");
-+MODULE_DESCRIPTION("Pseudo-driver for the intermediate queue device. See http://www.linuximq.net/ for more information.");
++MODULE_DESCRIPTION("Pseudo-driver for the intermediate queue device. See https://github.com/imq/linuximq/wiki for more information.");
 +MODULE_LICENSE("GPL");
 diff -urN linux-2.6.22.1/net/ipv6/netfilter/Kconfig linux-2.6.22.1+imq1/net/ipv6/netfilter/Kconfig
 --- linux-2.6.22.1/net/ipv6/netfilter/Kconfig	2007-07-14 15:41:26.000000000 +0930

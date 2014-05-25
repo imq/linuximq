@@ -817,7 +817,7 @@
 +module_exit(fini);
 +
 +MODULE_AUTHOR("http://www.linuximq.net");
-+MODULE_DESCRIPTION("Pseudo-driver for the intermediate queue device. See http://www.linuximq.net/ for more information.");
++MODULE_DESCRIPTION("Pseudo-driver for the intermediate queue device. See https://github.com/imq/linuximq/wiki for more information.");
 +MODULE_LICENSE("GPL");
 --- linux-2.6.20.7-original/net/ipv6/netfilter/Kconfig	2007-04-13 23:48:14.000000000 +0300
 +++ linux-2.6.20.7/net/ipv6/netfilter/Kconfig	2007-04-19 16:22:34.000000000 +0300

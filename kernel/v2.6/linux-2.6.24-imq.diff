@@ -819,7 +819,7 @@ diff -Naurw 2.6.24/net/ipv6/netfilter/ip6t_IMQ.c 2.6.24.imq/net/ipv6/netfilter/i
 +module_exit(fini);
 +
 +MODULE_AUTHOR("http://www.linuximq.net");
-+MODULE_DESCRIPTION("Pseudo-driver for the intermediate queue device. See http://www.linuximq.net/ for more information.");
++MODULE_DESCRIPTION("Pseudo-driver for the intermediate queue device. See https://github.com/imq/linuximq/wiki for more information.");
 +MODULE_LICENSE("GPL");
 diff -Naurw 2.6.24/net/ipv6/netfilter/Kconfig 2.6.24.imq/net/ipv6/netfilter/Kconfig
 --- 2.6.24/net/ipv6/netfilter/Kconfig	2008-01-24 19:58:37.000000000 -0300

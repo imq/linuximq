@@ -280,22 +280,22 @@ diff -Nru linux-2.6.18.orig/drivers/net/imq.c linux-2.6.18/drivers/net/imq.c
 +
 +static void __exit imq_unhook(void)
 +{
++       nf_unregister_hook(&imq_ingress_ipv4);
++       nf_unregister_hook(&imq_egress_ipv4);
++       nf_unregister_queue_handler(PF_INET);
 +#if defined(CONFIG_IPV6) || defined (CONFIG_IPV6_MODULE)
 +       nf_unregister_hook(&imq_ingress_ipv6);
 +       nf_unregister_hook(&imq_egress_ipv6);
 +       nf_unregister_queue_handler(PF_INET6);
 +#endif
-+       nf_unregister_hook(&imq_ingress_ipv4);
-+       nf_unregister_hook(&imq_egress_ipv4);
-+       nf_unregister_queue_handler(PF_INET);
 +}
 +
 +static int __init imq_dev_init(struct net_device *dev)
 +{
 +       dev->hard_start_xmit    = imq_dev_xmit;
 +       dev->type               = ARPHRD_VOID;
-+       dev->mtu                = 16000;
-+       dev->tx_queue_len       = 11000;
++       dev->mtu                = 1500;
++       dev->tx_queue_len       = 30;
 +       dev->flags              = IFF_NOARP;
 +       dev->priv = kmalloc(sizeof(struct net_device_stats), GFP_KERNEL);
 +       if (dev->priv == NULL)
@@ -433,7 +433,7 @@ diff -Nru linux-2.6.18.orig/drivers/net/Kconfig linux-2.6.18/drivers/net/Kconfig
 +choice
 +        prompt "IMQ behavior (PRE/POSTROUTING)"
 +	depends on IMQ
-+        default IMQ_BEHAVIOR_AB
++        default IMQ_BEHAVIOR_BA
 +        help
 +
 +                This settings defines how IMQ behaves in respect to its
@@ -523,7 +523,7 @@ diff -Nru linux-2.6.18.orig/drivers/net/Kconfig linux-2.6.18/drivers/net/Kconfig
 +config IMQ_NUM_DEVS
 +
 +        int "Number of IMQ devices"
-+	range 2 16
++	range 2 8
 +	depends on IMQ
 +        default "2"
 +        help
