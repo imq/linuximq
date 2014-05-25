@@ -1,0 +1,7 @@
+Pseudo-driver for the intermediate queue device.
+------------------------------------------------
+
+
+Kernel versions 2.6.35, 2.6.37, 2.6.38, 2.6.39
+-all the patches in this folder are multi-queue (see https://github.com/imq/linuximq/wiki/FAQ for what is multi queue)
+
