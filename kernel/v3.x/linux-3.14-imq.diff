@@ -142,10 +142,10 @@ index 3fef8a8..12dafc0 100644
  obj-$(CONFIG_MII) += mii.o
 diff --git a/drivers/net/imq.c b/drivers/net/imq.c
 new file mode 100644
-index 0000000..e8cd6c9
+index 0000000..177ccdc
 --- /dev/null
 +++ b/drivers/net/imq.c
-@@ -0,0 +1,1011 @@
+@@ -0,0 +1,1023 @@
 +/*
 + *             Pseudo-driver for the intermediate queue device.
 + *
@@ -836,7 +836,7 @@ index 0000000..e8cd6c9
 +
 +static int __imq_nf_queue(struct nf_queue_entry *entry, struct net_device *dev)
 +{
-+	struct sk_buff *skb_orig, *skb, *skb_shared;
++	struct sk_buff *skb_orig, *skb, *skb_shared, *skb_popd;
 +	struct Qdisc *q;
 +	struct netdev_queue *txq;
 +	spinlock_t *root_lock;
@@ -904,6 +904,8 @@ index 0000000..e8cd6c9
 +
 +		skb->destructor = &imq_skb_destructor;
 +
++		skb_popd = qdisc_dequeue_skb(q);
++
 +		/* cloned? */
 +		if (unlikely(skb_orig))
 +			kfree_skb(skb_orig); /* free original */
@@ -911,8 +913,18 @@ index 0000000..e8cd6c9
 +		spin_unlock(root_lock);
 +		rcu_read_unlock_bh();
 +
++#if 0
 +		/* schedule qdisc dequeue */
 +		__netif_schedule(q);
++#else
++		if (likely(skb_popd)) {
++			txq = netdev_get_tx_queue(dev, skb_get_queue_mapping(skb_popd));
++			HARD_TX_LOCK(dev, txq, smp_processor_id());
++			if (!netif_xmit_frozen_or_stopped(txq))
++				dev_hard_start_xmit(skb_popd, dev, txq);
++			HARD_TX_UNLOCK(dev, txq);
++		}
++#endif
 +
 +		retval = 0;
 +		goto out;
@@ -1308,6 +1320,19 @@ index 84a53d7..6ffb593 100644
  
  bool nf_queue_entry_get_refs(struct nf_queue_entry *entry);
  void nf_queue_entry_release_refs(struct nf_queue_entry *entry);
+diff --git a/include/net/pkt_sched.h b/include/net/pkt_sched.h
+index 891d80d..9bf58eb 100644
+--- a/include/net/pkt_sched.h
++++ b/include/net/pkt_sched.h
+@@ -103,6 +103,8 @@ int sch_direct_xmit(struct sk_buff *skb, struct Qdisc *q,
+ 
+ void __qdisc_run(struct Qdisc *q);
+ 
++struct sk_buff *qdisc_dequeue_skb(struct Qdisc *q);
++
+ static inline void qdisc_run(struct Qdisc *q)
+ {
+ 	if (qdisc_run_begin(q))
 diff --git a/include/uapi/linux/netfilter.h b/include/uapi/linux/netfilter.h
 index ef1b1f8..079e5ff 100644
 --- a/include/uapi/linux/netfilter.h
@@ -1736,3 +1761,20 @@ index 0000000..1c3cd66
 +MODULE_ALIAS("ipt_IMQ");
 +MODULE_ALIAS("ip6t_IMQ");
 +
+diff --git a/net/sched/sch_generic.c b/net/sched/sch_generic.c
+index e82e43b..73ec4b0 100644
+--- a/net/sched/sch_generic.c
++++ b/net/sched/sch_generic.c
+@@ -77,6 +77,12 @@ static inline struct sk_buff *dequeue_skb(struct Qdisc *q)
+ 	return skb;
+ }
+ 
++struct sk_buff *qdisc_dequeue_skb(struct Qdisc *q)
++{
++   return dequeue_skb(q);
++}
++EXPORT_SYMBOL(qdisc_dequeue_skb);
++
+ static inline int handle_dev_cpu_collision(struct sk_buff *skb,
+ 					   struct netdev_queue *dev_queue,
+ 					   struct Qdisc *q)
