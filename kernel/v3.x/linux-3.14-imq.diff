@@ -292,6 +292,11 @@ index 0000000..177ccdc
 + *             2014/02/07 - Jussi Kivilinna <jussi.kivilinna@iki.fi>
 + *              - Port to 3.13
 + *
++ *             2015/06/15 - Feng Gao <gfree.wind@gmail.com>
++ *              - Port to 3.14
++ *              - Pop and send one packet when push one packet into the IMQ queue.
++ *                It could enhance the perfermance of IMQ about 20%.
++ *
 + *	       Also, many thanks to pablo Sebastian Greco for making the initial
 + *	       patch and to those who helped the testing.
 + *
