@@ -17,7 +17,7 @@ index f9009be..07e6029 100644
 +	  and distribute bandwidth among them. Iptables is used to specify
 +	  through which IMQ device, if any, packets travel.
 +
-+	  More information at: https://github.com/imq/linuximq/wiki/
++	  More information at: https://github.com/imq/linuximq/wiki
 +
 +	  To compile this driver as a module, choose M here: the module
 +	  will be called imq.  If unsure, say N.
