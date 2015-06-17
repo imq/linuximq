@@ -1,5 +1,8 @@
 IMQ changelog:
 --------------
+2015-06-17
+----------
+		Feng Gao support for kernel 3.18
 2014-02-24
 ----------
 		patch for kernel 3.13.x
