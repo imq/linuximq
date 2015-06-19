@@ -142,7 +142,7 @@ index 3fef8a8..12dafc0 100644
  obj-$(CONFIG_MII) += mii.o
 diff --git a/drivers/net/imq.c b/drivers/net/imq.c
 new file mode 100644
-index 0000000..177ccdc
+index 0000000..9fc87d4
 --- /dev/null
 +++ b/drivers/net/imq.c
 @@ -0,0 +1,1023 @@
@@ -158,7 +158,149 @@ index 0000000..177ccdc
 + *
 + *            The first version was written by Martin Devera, <devik@cdi.cz>
 + *
-+ * 		   See Credits.txt
++ * Credits:    Jan Rafaj <imq2t@cedric.vabo.cz>
++ *              - Update patch to 2.4.21
++ *             Sebastian Strollo <sstrollo@nortelnetworks.com>
++ *              - Fix "Dead-loop on netdevice imq"-issue
++ *             Marcel Sebek <sebek64@post.cz>
++ *              - Update to 2.6.2-rc1
++ *
++ *	       After some time of inactivity there is a group taking care
++ *	       of IMQ again: http://www.linuximq.net
++ *
++ *
++ *	       2004/06/30 - New version of IMQ patch to kernels <=2.6.7
++ *             including the following changes:
++ *
++ *	       - Correction of ipv6 support "+"s issue (Hasso Tepper)
++ *	       - Correction of imq_init_devs() issue that resulted in
++ *	       kernel OOPS unloading IMQ as module (Norbert Buchmuller)
++ *	       - Addition of functionality to choose number of IMQ devices
++ *	       during kernel config (Andre Correa)
++ *	       - Addition of functionality to choose how IMQ hooks on
++ *	       PRE and POSTROUTING (after or before NAT) (Andre Correa)
++ *	       - Cosmetic corrections (Norbert Buchmuller) (Andre Correa)
++ *
++ *
++ *             2005/12/16 - IMQ versions between 2.6.7 and 2.6.13 were
++ *             released with almost no problems. 2.6.14-x was released
++ *             with some important changes: nfcache was removed; After
++ *             some weeks of trouble we figured out that some IMQ fields
++ *             in skb were missing in skbuff.c - skb_clone and copy_skb_header.
++ *             These functions are correctly patched by this new patch version.
++ *
++ *             Thanks for all who helped to figure out all the problems with
++ *             2.6.14.x: Patrick McHardy, Rune Kock, VeNoMouS, Max CtRiX,
++ *             Kevin Shanahan, Richard Lucassen, Valery Dachev (hopefully
++ *             I didn't forget anybody). I apologize again for my lack of time.
++ *
++ *
++ *             2008/06/17 - 2.6.25 - Changed imq.c to use qdisc_run() instead
++ *             of qdisc_restart() and moved qdisc_run() to tasklet to avoid
++ *             recursive locking. New initialization routines to fix 'rmmod' not
++ *             working anymore. Used code from ifb.c. (Jussi Kivilinna)
++ *
++ *             2008/08/06 - 2.6.26 - (JK)
++ *              - Replaced tasklet with 'netif_schedule()'.
++ *              - Cleaned up and added comments for imq_nf_queue().
++ *
++ *             2009/04/12
++ *              - Add skb_save_cb/skb_restore_cb helper functions for backuping
++ *                control buffer. This is needed because qdisc-layer on kernels
++ *                2.6.27 and newer overwrite control buffer. (Jussi Kivilinna)
++ *              - Add better locking for IMQ device. Hopefully this will solve
++ *                SMP issues. (Jussi Kivilinna)
++ *              - Port to 2.6.27
++ *              - Port to 2.6.28
++ *              - Port to 2.6.29 + fix rmmod not working
++ *
++ *             2009/04/20 - (Jussi Kivilinna)
++ *              - Use netdevice feature flags to avoid extra packet handling
++ *                by core networking layer and possibly increase performance.
++ *
++ *             2009/09/26 - (Jussi Kivilinna)
++ *              - Add imq_nf_reinject_lockless to fix deadlock with
++ *                imq_nf_queue/imq_nf_reinject.
++ *
++ *             2009/12/08 - (Jussi Kivilinna)
++ *              - Port to 2.6.32
++ *              - Add check for skb->nf_queue_entry==NULL in imq_dev_xmit()
++ *              - Also add better error checking for skb->nf_queue_entry usage
++ *
++ *             2010/02/25 - (Jussi Kivilinna)
++ *              - Port to 2.6.33
++ *
++ *             2010/08/15 - (Jussi Kivilinna)
++ *              - Port to 2.6.35
++ *              - Simplify hook registration by using nf_register_hooks.
++ *              - nf_reinject doesn't need spinlock around it, therefore remove
++ *                imq_nf_reinject function. Other nf_reinject users protect
++ *                their own data with spinlock. With IMQ however all data is
++ *                needed is stored per skbuff, so no locking is needed.
++ *              - Changed IMQ to use 'separate' NF_IMQ_QUEUE instead of
++ *                NF_QUEUE, this allows working coexistance of IMQ and other
++ *                NF_QUEUE users.
++ *              - Make IMQ multi-queue. Number of IMQ device queues can be
++ *                increased with 'numqueues' module parameters. Default number
++ *                of queues is 1, in other words by default IMQ works as
++ *                single-queue device. Multi-queue selection is based on
++ *                IFB multi-queue patch by Changli Gao <xiaosuo@gmail.com>.
++ *
++ *             2011/03/18 - (Jussi Kivilinna)
++ *              - Port to 2.6.38
++ *
++ *             2011/07/12 - (syoder89@gmail.com)
++ *              - Crash fix that happens when the receiving interface has more
++ *                than one queue (add missing skb_set_queue_mapping in
++ *                imq_select_queue).
++ *
++ *             2011/07/26 - (Jussi Kivilinna)
++ *              - Add queue mapping checks for packets exiting IMQ.
++ *              - Port to 3.0
++ *
++ *             2011/08/16 - (Jussi Kivilinna)
++ *              - Clear IFF_TX_SKB_SHARING flag that was added for linux 3.0.2
++ *
++ *             2011/11/03 - Germano Michel <germanomichel@gmail.com>
++ *              - Fix IMQ for net namespaces
++ *
++ *             2011/11/04 - Jussi Kivilinna <jussi.kivilinna@mbnet.fi>
++ *              - Port to 3.1
++ *              - Clean-up, move 'get imq device pointer by imqX name' to
++ *                separate function from imq_nf_queue().
++ *
++ *             2012/01/05 - Jussi Kivilinna <jussi.kivilinna@mbnet.fi>
++ *              - Port to 3.2
++ *
++ *             2012/03/19 - Jussi Kivilinna <jussi.kivilinna@mbnet.fi>
++ *              - Port to 3.3
++ *
++ *             2012/12/12 - Jussi Kivilinna <jussi.kivilinna@mbnet.fi>
++ *              - Port to 3.7
++ *              - Fix checkpatch.pl warnings
++ *
++ *             2013/09/10 - Jussi Kivilinna <jussi.kivilinna@iki.fi>
++ *              - Fixed GSO handling for 3.10, see imq_nf_queue() for comments.
++ *              - Don't copy skb->cb_next when copying or cloning skbuffs.
++ *
++ *             2013/09/16 - Jussi Kivilinna <jussi.kivilinna@iki.fi>
++ *              - Port to 3.11
++ *
++ *             2013/11/12 - Jussi Kivilinna <jussi.kivilinna@iki.fi>
++ *              - Port to 3.12
++ *
++ *             2014/02/07 - Jussi Kivilinna <jussi.kivilinna@iki.fi>
++ *              - Port to 3.13
++ *
++ *             2015/06/15 - Feng Gao <gfree.wind@gmail.com>
++ *              - Port to 3.14
++ *              - Pop and send one packet when push one packet into the IMQ queue.
++ *                It could enhance the perfermance of IMQ about 20%.
++ *
++ *	       Also, many thanks to pablo Sebastian Greco for making the initial
++ *	       patch and to those who helped the testing.
++ *
++ *             More info at: http://www.linuximq.net/ (Andre Correa)
 + */
 +
 +#include <linux/module.h>
@@ -782,10 +924,10 @@ index 0000000..177ccdc
 +#else
 +		if (likely(skb_popd)) {
 +			txq = netdev_get_tx_queue(dev, skb_get_queue_mapping(skb_popd));
-+			HARD_TX_LOCK(dev, txq, smp_processor_id());
++			HARD_TX_LOCK_BH(dev, txq);
 +			if (!netif_xmit_frozen_or_stopped(txq))
 +				dev_hard_start_xmit(skb_popd, dev, txq);
-+			HARD_TX_UNLOCK(dev, txq);
++			HARD_TX_UNLOCK_BH(dev, txq);
 +		}
 +#endif
 +
@@ -1027,11 +1169,6 @@ index 0000000..177ccdc
 +module_param(numqueues, int, 0);
 +MODULE_PARM_DESC(numdevs, "number of IMQ devices (how many imq* devices will be created)");
 +MODULE_PARM_DESC(numqueues, "number of queues per IMQ device");
-+MODULE_AUTHOR("https://github.com/imq/linuximq");
-+MODULE_DESCRIPTION("Pseudo-driver for the intermediate queue device. See https://github.com/imq/linuximq/wiki/UsingIMQ for more information.");
-+MODULE_LICENSE("GPL");
-+MODULE_ALIAS_RTNL_LINK("imq");
-+
 diff --git a/include/linux/imq.h b/include/linux/imq.h
 new file mode 100644
 index 0000000..1babb09
@@ -1051,6 +1188,29 @@ index 0000000..1babb09
 +
 +#endif /* _IMQ_H */
 +
+diff --git a/include/linux/netdevice.h b/include/linux/netdevice.h
+index 911718f..cf562b2 100644
+--- a/include/linux/netdevice.h
++++ b/include/linux/netdevice.h
+@@ -2838,6 +2838,18 @@ static inline void netif_tx_unlock_bh(struct net_device *dev)
+ 	}						\
+ }
+ 
++#define HARD_TX_LOCK_BH(dev, txq) {           \
++    if ((dev->features & NETIF_F_LLTX) == 0) {  \
++        __netif_tx_lock_bh(txq);      \
++    }                       \
++}
++
++#define HARD_TX_UNLOCK_BH(dev, txq) {          \
++    if ((dev->features & NETIF_F_LLTX) == 0) {  \
++        __netif_tx_unlock_bh(txq);         \
++    }                       \
++}
++
+ static inline void netif_tx_disable(struct net_device *dev)
+ {
+ 	unsigned int i;
 diff --git a/include/linux/netfilter/xt_IMQ.h b/include/linux/netfilter/xt_IMQ.h
 new file mode 100644
 index 0000000..9b07230
@@ -1099,7 +1259,7 @@ index 0000000..198ac01
 +#endif /* _IP6T_IMQ_H */
 +
 diff --git a/include/linux/skbuff.h b/include/linux/skbuff.h
-index ab31337..ee43a66 100644
+index ad8f859..8473090 100644
 --- a/include/linux/skbuff.h
 +++ b/include/linux/skbuff.h
 @@ -33,6 +33,9 @@
@@ -1155,7 +1315,7 @@ index ab31337..ee43a66 100644
  extern struct kmem_cache *skbuff_head_cache;
  
  void kfree_skb_partial(struct sk_buff *skb, bool head_stolen);
-@@ -2740,6 +2758,10 @@ static inline void __nf_copy(struct sk_buff *dst, const struct sk_buff *src)
+@@ -2739,6 +2757,10 @@ static inline void __nf_copy(struct sk_buff *dst, const struct sk_buff *src)
  	nf_conntrack_get(src->nfct);
  	dst->nfctinfo = src->nfctinfo;
  #endif
@@ -1211,7 +1371,7 @@ index ef1b1f8..079e5ff 100644
  /* we overload the higher bits for encoding auxiliary data such as the queue
   * number or errno values. Not nice, but better than additional function
 diff --git a/net/core/dev.c b/net/core/dev.c
-index 73abbd7..f6acd88 100644
+index 3ed11a5..2a9a753 100644
 --- a/net/core/dev.c
 +++ b/net/core/dev.c
 @@ -132,6 +132,9 @@
@@ -1224,13 +1384,13 @@ index 73abbd7..f6acd88 100644
  
  #include "net-sysfs.h"
  
-@@ -2615,7 +2618,12 @@ int dev_hard_start_xmit(struct sk_buff *skb, struct net_device *dev,
+@@ -2611,7 +2614,12 @@ int dev_hard_start_xmit(struct sk_buff *skb, struct net_device *dev,
  			}
  		}
  
 +#if defined(CONFIG_IMQ) || defined(CONFIG_IMQ_MODULE)
 +		if (!list_empty(&ptype_all) &&
-+					!(skb->imq_flags & IMQ_F_ENQUEUE))
++			!(skb->imq_flags & IMQ_F_ENQUEUE))
 +#else
  		if (!list_empty(&ptype_all))
 +#endif
@@ -1238,7 +1398,7 @@ index 73abbd7..f6acd88 100644
  
  		skb_len = skb->len;
 diff --git a/net/core/skbuff.c b/net/core/skbuff.c
-index 69ec61a..8128202 100644
+index baf6fc4..abaa4be 100644
 --- a/net/core/skbuff.c
 +++ b/net/core/skbuff.c
 @@ -77,6 +77,86 @@
@@ -1328,7 +1488,7 @@ index 69ec61a..8128202 100644
  
  /**
   *	skb_panic - private function for out-of-line support
-@@ -581,6 +661,28 @@ static void skb_release_head_state(struct sk_buff *skb)
+@@ -563,6 +643,28 @@ static void skb_release_head_state(struct sk_buff *skb)
  		WARN_ON(in_irq());
  		skb->destructor(skb);
  	}
@@ -1357,7 +1517,7 @@ index 69ec61a..8128202 100644
  #if IS_ENABLED(CONFIG_NF_CONNTRACK)
  	nf_conntrack_put(skb->nfct);
  #endif
-@@ -712,6 +814,10 @@ static void __copy_skb_header(struct sk_buff *new, const struct sk_buff *old)
+@@ -694,6 +796,10 @@ static void __copy_skb_header(struct sk_buff *new, const struct sk_buff *old)
  	new->sp			= secpath_get(old->sp);
  #endif
  	memcpy(new->cb, old->cb, sizeof(old->cb));
@@ -1368,7 +1528,7 @@ index 69ec61a..8128202 100644
  	new->csum		= old->csum;
  	new->local_df		= old->local_df;
  	new->pkt_type		= old->pkt_type;
-@@ -3251,6 +3357,13 @@ void __init skb_init(void)
+@@ -3233,6 +3339,13 @@ void __init skb_init(void)
  						0,
  						SLAB_HWCACHE_ALIGN|SLAB_PANIC,
  						NULL);
@@ -1383,7 +1543,7 @@ index 69ec61a..8128202 100644
  
  /**
 diff --git a/net/ipv6/ip6_output.c b/net/ipv6/ip6_output.c
-index 066d0b0..5442ea2 100644
+index 12f7ef0..deb1c9d 100644
 --- a/net/ipv6/ip6_output.c
 +++ b/net/ipv6/ip6_output.c
 @@ -64,9 +64,6 @@ static int ip6_finish_output2(struct sk_buff *skb)
@@ -1618,8 +1778,8 @@ index 0000000..1c3cd66
 +module_init(imq_init);
 +module_exit(imq_fini);
 +
-+MODULE_AUTHOR("https://github.com/imq/linuximq");
-+MODULE_DESCRIPTION("Pseudo-driver for the intermediate queue device. See https://github.com/imq/linuximq/wiki/WhatIs for more information.");
++MODULE_AUTHOR("http://www.linuximq.net");
++MODULE_DESCRIPTION("Pseudo-driver for the intermediate queue device. See http://www.linuximq.net/ for more information.");
 +MODULE_LICENSE("GPL");
 +MODULE_ALIAS("ipt_IMQ");
 +MODULE_ALIAS("ip6t_IMQ");
