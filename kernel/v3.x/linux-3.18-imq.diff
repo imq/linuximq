@@ -142,7 +142,7 @@ index 61aefdd..41be5b8 100644
  obj-$(CONFIG_MII) += mii.o
 diff --git a/drivers/net/imq.c b/drivers/net/imq.c
 new file mode 100644
-index 0000000..3d245c1
+index 0000000..b1b9712
 --- /dev/null
 +++ b/drivers/net/imq.c
 @@ -0,0 +1,891 @@
@@ -790,11 +790,11 @@ index 0000000..3d245c1
 +			if (skb_popd) {
 +				int dummy_ret; /* Because the IMQ xmit func always is successful */
 +				txq = netdev_get_tx_queue(dev, skb_get_queue_mapping(skb_popd));
-+				HARD_TX_LOCK(dev, txq, smp_processor_id());
++				HARD_TX_LOCK_BH(dev, txq);
 +				if (!netif_xmit_frozen_or_stopped(txq)) {
 +					dev_hard_start_xmit(skb_popd, dev, txq, &dummy_ret);
 +				}
-+				HARD_TX_UNLOCK(dev, txq);
++				HARD_TX_UNLOCK_BH(dev, txq);
 +			}
 +		}
 +#endif
@@ -1056,6 +1056,29 @@ index 0000000..1babb09
 +
 +#endif /* _IMQ_H */
 +
+diff --git a/include/linux/netdevice.h b/include/linux/netdevice.h
+index c3fd34d..6f71f6c 100644
+--- a/include/linux/netdevice.h
++++ b/include/linux/netdevice.h
+@@ -3172,6 +3172,18 @@ static inline void netif_tx_unlock_bh(struct net_device *dev)
+ 	}						\
+ }
+ 
++#define HARD_TX_LOCK_BH(dev, txq) {           \
++    if ((dev->features & NETIF_F_LLTX) == 0) {  \
++        __netif_tx_lock_bh(txq);      \
++    }                       \
++}
++
++#define HARD_TX_UNLOCK_BH(dev, txq) {          \
++    if ((dev->features & NETIF_F_LLTX) == 0) {  \
++        __netif_tx_unlock_bh(txq);         \
++    }                       \
++}
++
+ static inline void netif_tx_disable(struct net_device *dev)
+ {
+ 	unsigned int i;
 diff --git a/include/linux/netfilter/xt_IMQ.h b/include/linux/netfilter/xt_IMQ.h
 new file mode 100644
 index 0000000..9b07230
