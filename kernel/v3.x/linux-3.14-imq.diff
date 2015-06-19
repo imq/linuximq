@@ -142,10 +142,10 @@ index 3fef8a8..12dafc0 100644
  obj-$(CONFIG_MII) += mii.o
 diff --git a/drivers/net/imq.c b/drivers/net/imq.c
 new file mode 100644
-index 0000000..e105c03
+index 0000000..4c903f6
 --- /dev/null
 +++ b/drivers/net/imq.c
-@@ -0,0 +1,888 @@
+@@ -0,0 +1,887 @@
 +/*
 + *             Pseudo-driver for the intermediate queue device.
 + *
@@ -775,8 +775,6 @@ index 0000000..e105c03
 +			kfree_skb(skb_orig); /* free original */
 +
 +		spin_unlock(root_lock);
-+		rcu_read_unlock_bh();
-+
 +#if 0
 +		/* schedule qdisc dequeue */
 +		__netif_schedule(q);
@@ -789,6 +787,7 @@ index 0000000..e105c03
 +			HARD_TX_UNLOCK_BH(dev, txq);
 +		}
 +#endif
++		rcu_read_unlock_bh();
 +
 +		retval = 0;
 +		goto out;
