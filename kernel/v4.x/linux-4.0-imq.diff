@@ -1369,7 +1369,7 @@ index ef1b1f8..079e5ff 100644
  /* we overload the higher bits for encoding auxiliary data such as the queue
   * number or errno values. Not nice, but better than additional function
 diff --git a/net/core/dev.c b/net/core/dev.c
-index 22a53ac..75cbace 100644
+index 22a53ac..0bdb8cb 100644
 --- a/net/core/dev.c
 +++ b/net/core/dev.c
 @@ -135,6 +135,9 @@
@@ -1387,8 +1387,8 @@ index 22a53ac..75cbace 100644
  	int rc;
  
 +#if defined(CONFIG_IMQ) || defined(CONFIG_IMQ_MODULE)
-+               if (!list_empty(&ptype_all) &&
-+                                       !(skb->imq_flags & IMQ_F_ENQUEUE))
++	if ((!list_empty(&ptype_all) || !list_empty(&dev->ptype_all)) &&
++		!(skb->imq_flags & IMQ_F_ENQUEUE))
 +#else
  	if (!list_empty(&ptype_all) || !list_empty(&dev->ptype_all))
 +#endif
