@@ -1,5 +1,5 @@
 diff --git a/drivers/net/Kconfig b/drivers/net/Kconfig
-index f9009be..07e6029 100644
+index f9009be..5dd0c43 100644
 --- a/drivers/net/Kconfig
 +++ b/drivers/net/Kconfig
 @@ -199,6 +199,125 @@ config RIONET_RX_SIZE
@@ -142,10 +142,10 @@ index 61aefdd..41be5b8 100644
  obj-$(CONFIG_MII) += mii.o
 diff --git a/drivers/net/imq.c b/drivers/net/imq.c
 new file mode 100644
-index 0000000..889481c
+index 0000000..aef5832
 --- /dev/null
 +++ b/drivers/net/imq.c
-@@ -0,0 +1,1027 @@
+@@ -0,0 +1,890 @@
 +/*
 + *             Pseudo-driver for the intermediate queue device.
 + *
@@ -763,33 +763,40 @@ index 0000000..889481c
 +	qdisc_enqueue_root(skb_shared, q); /* might kfree_skb */
 +
 +	if (likely(atomic_read(&skb_shared->users) == users + 1)) {
++		bool validate;		
++
 +		kfree_skb(skb_shared); /* decrease reference count by one */
 +
 +		skb->destructor = &imq_skb_destructor;
 +
-+		skb_popd = qdisc_dequeue_skb(q);
++		skb_popd = qdisc_dequeue_skb(q, &validate);
 +
 +		/* cloned? */
 +		if (unlikely(skb_orig))
 +			kfree_skb(skb_orig); /* free original */
 +
 +		spin_unlock(root_lock);
-+		rcu_read_unlock_bh();
-+
 +#if 0
 +		/* schedule qdisc dequeue */
 +		__netif_schedule(q);
 +#else
 +		if (likely(skb_popd)) {
-+			int dummy_ret; /* Because the IMQ xmit func always is successful */
-+			txq = netdev_get_tx_queue(dev, skb_get_queue_mapping(skb_popd));
-+			HARD_TX_LOCK(dev, txq, smp_processor_id());
-+			if (!netif_xmit_frozen_or_stopped(txq)) {
-+				dev_hard_start_xmit(skb_popd, dev, txq, &dummy_ret);
++			/* Note that we validate skb (GSO, checksum, ...) outside of locks */
++			if (validate)
++				skb_popd = validate_xmit_skb_list(skb_popd, dev);
++
++			if (skb_popd) {
++				int dummy_ret; /* Because the IMQ xmit func always is successful */
++				txq = netdev_get_tx_queue(dev, skb_get_queue_mapping(skb_popd));
++				HARD_TX_LOCK_BH(dev, txq);
++				if (!netif_xmit_frozen_or_stopped(txq)) {
++					dev_hard_start_xmit(skb_popd, dev, txq, &dummy_ret);
++				}
++				HARD_TX_UNLOCK_BH(dev, txq);
 +			}
-+			HARD_TX_UNLOCK(dev, txq);
 +		}
 +#endif
++		rcu_read_unlock_bh();
 +
 +		retval = 0;
 +		goto out;
@@ -1048,6 +1055,29 @@ index 0000000..1babb09
 +
 +#endif /* _IMQ_H */
 +
+diff --git a/include/linux/netdevice.h b/include/linux/netdevice.h
+index c3fd34d..6f71f6c 100644
+--- a/include/linux/netdevice.h
++++ b/include/linux/netdevice.h
+@@ -3172,6 +3172,18 @@ static inline void netif_tx_unlock_bh(struct net_device *dev)
+ 	}						\
+ }
+ 
++#define HARD_TX_LOCK_BH(dev, txq) {           \
++    if ((dev->features & NETIF_F_LLTX) == 0) {  \
++        __netif_tx_lock_bh(txq);      \
++    }                       \
++}
++
++#define HARD_TX_UNLOCK_BH(dev, txq) {          \
++    if ((dev->features & NETIF_F_LLTX) == 0) {  \
++        __netif_tx_unlock_bh(txq);         \
++    }                       \
++}
++
+ static inline void netif_tx_disable(struct net_device *dev)
+ {
+ 	unsigned int i;
 diff --git a/include/linux/netfilter/xt_IMQ.h b/include/linux/netfilter/xt_IMQ.h
 new file mode 100644
 index 0000000..9b07230
@@ -1181,14 +1211,14 @@ index 84a53d7..686c15c 100644
  bool nf_queue_entry_get_refs(struct nf_queue_entry *entry);
  void nf_queue_entry_release_refs(struct nf_queue_entry *entry);
 diff --git a/include/net/pkt_sched.h b/include/net/pkt_sched.h
-index 27a3383..d17a75f 100644
+index 27a3383..6ac74dc 100644
 --- a/include/net/pkt_sched.h
 +++ b/include/net/pkt_sched.h
 @@ -103,6 +103,8 @@ int sch_direct_xmit(struct sk_buff *skb, struct Qdisc *q,
  
  void __qdisc_run(struct Qdisc *q);
  
-+struct sk_buff *qdisc_dequeue_skb(struct Qdisc *q);
++struct sk_buff *qdisc_dequeue_skb(struct Qdisc *q, bool *validate);
 +
  static inline void qdisc_run(struct Qdisc *q)
  {
@@ -1208,7 +1238,7 @@ index ef1b1f8..079e5ff 100644
  /* we overload the higher bits for encoding auxiliary data such as the queue
   * number or errno values. Not nice, but better than additional function
 diff --git a/net/core/dev.c b/net/core/dev.c
-index 5cdbc1b..5508c05 100644
+index 5cdbc1b..19fd9f0 100644
 --- a/net/core/dev.c
 +++ b/net/core/dev.c
 @@ -133,6 +133,9 @@
@@ -1242,6 +1272,14 @@ index 5cdbc1b..5508c05 100644
  
  static struct sk_buff *validate_xmit_vlan(struct sk_buff *skb,
  					  netdev_features_t features)
+@@ -2746,6 +2755,7 @@ struct sk_buff *validate_xmit_skb_list(struct sk_buff *skb, struct net_device *d
+ 	}
+ 	return head;
+ }
++EXPORT_SYMBOL(validate_xmit_skb_list);
+ 
+ static void qdisc_pkt_len_init(struct sk_buff *skb)
+ {
 diff --git a/net/core/skbuff.c b/net/core/skbuff.c
 index 02ebb71..5275d94 100644
 --- a/net/core/skbuff.c
@@ -1554,7 +1592,7 @@ index 4c8b68e..45b0daa 100644
  				goto next_hook;
 diff --git a/net/netfilter/xt_IMQ.c b/net/netfilter/xt_IMQ.c
 new file mode 100644
-index 0000000..1c3cd66
+index 0000000..b11b14a
 --- /dev/null
 +++ b/net/netfilter/xt_IMQ.c
 @@ -0,0 +1,72 @@
@@ -1631,16 +1669,15 @@ index 0000000..1c3cd66
 +MODULE_ALIAS("ip6t_IMQ");
 +
 diff --git a/net/sched/sch_generic.c b/net/sched/sch_generic.c
-index 6efca30..eebe78b 100644
+index 6efca30..a2f9f999 100644
 --- a/net/sched/sch_generic.c
 +++ b/net/sched/sch_generic.c
-@@ -108,6 +108,15 @@ static struct sk_buff *dequeue_skb(struct Qdisc *q, bool *validate,
+@@ -108,6 +108,14 @@ static struct sk_buff *dequeue_skb(struct Qdisc *q, bool *validate,
  	return skb;
  }
  
-+struct sk_buff *qdisc_dequeue_skb(struct Qdisc *q)
++struct sk_buff *qdisc_dequeue_skb(struct Qdisc *q, bool *validate)
 +{
-+	bool validate;
 +	int packets;
 +
 +	return dequeue_skb(q, &validate, &packets);
