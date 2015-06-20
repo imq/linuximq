@@ -1,0 +1,6 @@
+Pseudo-driver for the intermediate queue device.
+------------------------------------------------
+
+
+Kernel version 4.x
+-all the patches in this folder are multi-queue
