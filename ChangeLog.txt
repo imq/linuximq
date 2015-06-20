@@ -1,5 +1,8 @@
 IMQ changelog:
 --------------
+2015-06-20
+		Feng Gao support for kernel 4.1
+
 2015-06-19
 		Feng Gao support for kernel 4.0 and fix the hang issue and crash issue by the performance enhancement.
 
