@@ -142,10 +142,10 @@ index e25fdd7..b411742 100644
  obj-$(CONFIG_MII) += mii.o
 diff --git a/drivers/net/imq.c b/drivers/net/imq.c
 new file mode 100644
-index 0000000..bbb166f
+index 0000000..53ea50a
 --- /dev/null
 +++ b/drivers/net/imq.c
-@@ -0,0 +1,1044 @@
+@@ -0,0 +1,1047 @@
 +/*
 + *             Pseudo-driver for the intermediate queue device.
 + *
@@ -777,26 +777,29 @@ index 0000000..bbb166f
 +
 +		spin_unlock(root_lock);
 +
-+#if 0
-+		/* schedule qdisc dequeue */
-+		__netif_schedule(q);
-+#else
 +		if (likely(skb_popd)) {
 +			/* Note that we validate skb (GSO, checksum, ...) outside of locks */
 +			if (validate)
-+        		skb_popd = validate_xmit_skb_list(skb_popd, dev);
-+			
++				skb_popd = validate_xmit_skb_list(skb_popd, dev);
++
 +			if (skb_popd) {
-+				int dummy_ret; /* Because the IMQ xmit func always is successful */
-+				txq = netdev_get_tx_queue(dev, skb_get_queue_mapping(skb_popd));
-+				HARD_TX_LOCK_BH(dev, txq);
-+				if (!netif_xmit_frozen_or_stopped(txq)) {
-+					dev_hard_start_xmit(skb_popd, dev, txq, &dummy_ret);
++				int dummy_ret;
++				int cpu = smp_processor_id(); /* ok because BHs are off */
++
++				txq = skb_get_tx_queue(dev, skb_popd);
++				if (unlikely(txq->xmit_lock_owner == cpu)) {
++					if (!netif_xmit_frozen_or_stopped(txq)) {
++						dev_hard_start_xmit(skb_popd, dev, txq, &dummy_ret);
++					}
++				} else {
++					HARD_TX_LOCK(dev, txq, cpu);
++					if (!netif_xmit_frozen_or_stopped(txq)) {
++						dev_hard_start_xmit(skb_popd, dev, txq, &dummy_ret);
++					}
++					HARD_TX_UNLOCK(dev, txq);
 +				}
-+				HARD_TX_UNLOCK_BH(dev, txq);
 +			}
 +		}
-+#endif
 +		rcu_read_unlock_bh();
 +		retval = 0;
 +		goto out;
