@@ -142,10 +142,10 @@ index 3fef8a8..12dafc0 100644
  obj-$(CONFIG_MII) += mii.o
 diff --git a/drivers/net/imq.c b/drivers/net/imq.c
 new file mode 100644
-index 0000000..4c903f6
+index 0000000..dd07478
 --- /dev/null
 +++ b/drivers/net/imq.c
-@@ -0,0 +1,887 @@
+@@ -0,0 +1,895 @@
 +/*
 + *             Pseudo-driver for the intermediate queue device.
 + *
@@ -780,11 +780,19 @@ index 0000000..4c903f6
 +		__netif_schedule(q);
 +#else
 +		if (likely(skb_popd)) {
-+			txq = netdev_get_tx_queue(dev, skb_get_queue_mapping(skb_popd));
-+			HARD_TX_LOCK_BH(dev, txq);
-+			if (!netif_xmit_frozen_or_stopped(txq))
++			int cpu = smp_processor_id();
++			txq = netdev_get_tx_queue(dev, skb_get_queue_mapping(skb_popd)); 
++			/*
++			IMQ device will not be frozen or stoped, and it always be successful.
++			So we need not check its status and return value to accelerate.
++			*/
++			if (unlikely(txq->xmit_lock_owner == cpu)) {
 +				dev_hard_start_xmit(skb_popd, dev, txq);
-+			HARD_TX_UNLOCK_BH(dev, txq);
++			} else {
++				HARD_TX_LOCK(dev, txq, cpu);
++				dev_hard_start_xmit(skb_popd, dev, txq);
++				HARD_TX_UNLOCK(dev, txq);
++			}
 +		}
 +#endif
 +		rcu_read_unlock_bh();
