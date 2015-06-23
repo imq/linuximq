@@ -1,5 +1,8 @@
 IMQ changelog:
 --------------
+2015-06-23
+		Feng Gao fix one hang issue caused by IPv6 and shutdown interfaces before remove IMQ rule of IPv6
+
 2015-06-20
 		Feng Gao support for kernel 4.1
 
