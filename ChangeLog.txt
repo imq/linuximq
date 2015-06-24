@@ -1,7 +1,8 @@
 IMQ changelog:
 --------------
 2015-06-24
-		Feng Gao removed usless skb_cb_store_lock of 4.0 patch. It will be merged into other patches if it is ok
+		Feng Gao removed usless skb_cb_store_lock of 4.0 patch. It will be merged into other patches if it is ok.
+		Fixed malformed linux-3.2-imq.diff and linux-3.10-imq.diff
 
 2015-06-23
 		Feng Gao fix one hang issue caused by IPv6 and shutdown interfaces before remove IMQ rule of IPv6
