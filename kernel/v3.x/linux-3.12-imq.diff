@@ -1,8 +1,8 @@
 diff --git a/drivers/net/Kconfig b/drivers/net/Kconfig
-index 3bc3ebc..ae32980 100644
+index 367aabc..b06b9ac 100644
 --- a/drivers/net/Kconfig
 +++ b/drivers/net/Kconfig
-@@ -208,6 +208,125 @@ config RIONET_RX_SIZE
+@@ -204,6 +204,125 @@ config RIONET_RX_SIZE
  	depends on RIONET
  	default "128"
  
@@ -129,7 +129,7 @@ index 3bc3ebc..ae32980 100644
  	tristate "Universal TUN/TAP device driver support"
  	depends on INET
 diff --git a/drivers/net/Makefile b/drivers/net/Makefile
-index ef3d090..b474ff4 100644
+index 3fef8a8..12dafc0 100644
 --- a/drivers/net/Makefile
 +++ b/drivers/net/Makefile
 @@ -9,6 +9,7 @@ obj-$(CONFIG_BONDING) += bonding/
@@ -1085,7 +1085,7 @@ index 0000000..198ac01
 +#endif /* _IP6T_IMQ_H */
 +
 diff --git a/include/linux/skbuff.h b/include/linux/skbuff.h
-index 478120a..b1bc7ff 100644
+index 79147dc..9f6af9b 100644
 --- a/include/linux/skbuff.h
 +++ b/include/linux/skbuff.h
 @@ -33,6 +33,9 @@
@@ -1098,7 +1098,7 @@ index 478120a..b1bc7ff 100644
  
  /* Don't change this without changing skb_csum_unnecessary! */
  #define CHECKSUM_NONE 0
-@@ -414,6 +417,9 @@ struct sk_buff {
+@@ -418,6 +421,9 @@ struct sk_buff {
  	 * first. This is owned by whoever has the skb queued ATM.
  	 */
  	char			cb[48] __aligned(8);
@@ -1108,7 +1108,7 @@ index 478120a..b1bc7ff 100644
  
  	unsigned long		_skb_refdst;
  #ifdef CONFIG_XFRM
-@@ -449,6 +455,9 @@ struct sk_buff {
+@@ -453,6 +459,9 @@ struct sk_buff {
  #if defined(CONFIG_NF_CONNTRACK) || defined(CONFIG_NF_CONNTRACK_MODULE)
  	struct nf_conntrack	*nfct;
  #endif
@@ -1118,18 +1118,17 @@ index 478120a..b1bc7ff 100644
  #ifdef CONFIG_BRIDGE_NETFILTER
  	struct nf_bridge_info	*nf_bridge;
  #endif
-@@ -488,6 +497,10 @@ struct sk_buff {
- 	/* 7/9 bit hole (depending on ndisc_nodetype presence) */
- 	kmemcheck_bitfield_end(flags2);
- 
+@@ -490,6 +499,9 @@ struct sk_buff {
+ 	 */
+ 	__u8			encapsulation:1;
+ 	/* 6/8 bit hole (depending on ndisc_nodetype presence) */
 +#if defined(CONFIG_IMQ) || defined(CONFIG_IMQ_MODULE)
 +	__u8			imq_flags:IMQ_F_BITS;
 +#endif
-+
- #ifdef CONFIG_NET_DMA
- 	dma_cookie_t		dma_cookie;
- #endif
-@@ -617,6 +630,12 @@ static inline struct rtable *skb_rtable(const struct sk_buff *skb)
+ 	kmemcheck_bitfield_end(flags2);
+ 
+ #if defined CONFIG_NET_DMA || defined CONFIG_NET_RX_BUSY_POLL
+@@ -625,6 +637,12 @@ static inline struct rtable *skb_rtable(const struct sk_buff *skb)
  	return (struct rtable *)skb_dst(skb);
  }
  
@@ -1142,17 +1141,17 @@ index 478120a..b1bc7ff 100644
  extern void kfree_skb(struct sk_buff *skb);
  extern void kfree_skb_list(struct sk_buff *segs);
  extern void skb_tx_error(struct sk_buff *skb);
-@@ -2748,6 +2767,10 @@ static inline void nf_copy(struct sk_buff *dst, const struct sk_buff *src)
- #if defined(CONFIG_NF_CONNTRACK) || defined(CONFIG_NF_CONNTRACK_MODULE)
- 	nf_conntrack_put(dst->nfct);
+@@ -2644,6 +2662,10 @@ static inline void __nf_copy(struct sk_buff *dst, const struct sk_buff *src)
+ 	nf_conntrack_get(src->nfct);
+ 	dst->nfctinfo = src->nfctinfo;
  #endif
 +#if defined(CONFIG_IMQ) || defined(CONFIG_IMQ_MODULE)
 +	dst->imq_flags = src->imq_flags;
 +	dst->nf_queue_entry = src->nf_queue_entry;
 +#endif
  #ifdef CONFIG_BRIDGE_NETFILTER
- 	nf_bridge_put(dst->nf_bridge);
- #endif
+ 	dst->nf_bridge  = src->nf_bridge;
+ 	nf_bridge_get(src->nf_bridge);
 diff --git a/include/net/netfilter/nf_queue.h b/include/net/netfilter/nf_queue.h
 index aaba4bb..f6e92a4 100644
 --- a/include/net/netfilter/nf_queue.h
@@ -1185,20 +1184,20 @@ index f7dc0eb..58c46a9 100644
  /* we overload the higher bits for encoding auxiliary data such as the queue
   * number or errno values. Not nice, but better than additional function
 diff --git a/net/core/dev.c b/net/core/dev.c
-index aeca8dd..e86580a 100644
+index 3ca487e..4e8ab04 100644
 --- a/net/core/dev.c
 +++ b/net/core/dev.c
-@@ -129,6 +129,9 @@
- #include <linux/inetdevice.h>
- #include <linux/cpu_rmap.h>
+@@ -131,6 +131,9 @@
  #include <linux/static_key.h>
+ #include <linux/hashtable.h>
+ #include <linux/vmalloc.h>
 +#if defined(CONFIG_IMQ) || defined(CONFIG_IMQ_MODULE)
 +#include <linux/imq.h>
 +#endif
  
  #include "net-sysfs.h"
  
-@@ -2578,7 +2581,12 @@ int dev_hard_start_xmit(struct sk_buff *skb, struct net_device *dev,
+@@ -2611,7 +2614,12 @@ int dev_hard_start_xmit(struct sk_buff *skb, struct net_device *dev,
  			}
  		}
  
@@ -1212,10 +1211,10 @@ index aeca8dd..e86580a 100644
  
  		skb_len = skb->len;
 diff --git a/net/core/skbuff.c b/net/core/skbuff.c
-index 6148716..718d46a 100644
+index fa8448a..f9e34d7 100644
 --- a/net/core/skbuff.c
 +++ b/net/core/skbuff.c
-@@ -75,6 +75,9 @@
+@@ -76,6 +76,9 @@
  
  struct kmem_cache *skbuff_head_cache __read_mostly;
  static struct kmem_cache *skbuff_fclone_cache __read_mostly;
@@ -1225,7 +1224,7 @@ index 6148716..718d46a 100644
  
  /**
   *	skb_panic - private function for out-of-line support
-@@ -554,6 +557,28 @@ static void skb_release_head_state(struct sk_buff *skb)
+@@ -568,6 +571,28 @@ static void skb_release_head_state(struct sk_buff *skb)
  		WARN_ON(in_irq());
  		skb->destructor(skb);
  	}
@@ -1237,7 +1236,7 @@ index 6148716..718d46a 100644
 +	while (skb->cb_next != NULL) {
 +		if (net_ratelimit())
 +			pr_warn("IMQ: kfree_skb: skb->cb_next: %08x\n",
-+				(unsigned int)skb->cb_next);
++					(unsigned int)skb->cb_next);
 +
 +		skb_restore_cb(skb);
 +	}
@@ -1254,7 +1253,7 @@ index 6148716..718d46a 100644
  #if IS_ENABLED(CONFIG_NF_CONNTRACK)
  	nf_conntrack_put(skb->nfct);
  #endif
-@@ -685,6 +710,10 @@ static void __copy_skb_header(struct sk_buff *new, const struct sk_buff *old)
+@@ -700,6 +725,10 @@ static void __copy_skb_header(struct sk_buff *new, const struct sk_buff *old)
  	new->sp			= secpath_get(old->sp);
  #endif
  	memcpy(new->cb, old->cb, sizeof(old->cb));
@@ -1265,12 +1264,12 @@ index 6148716..718d46a 100644
  	new->csum		= old->csum;
  	new->local_df		= old->local_df;
  	new->pkt_type		= old->pkt_type;
-@@ -3067,6 +3096,13 @@ void __init skb_init(void)
+@@ -3109,6 +3138,13 @@ void __init skb_init(void)
  						0,
  						SLAB_HWCACHE_ALIGN|SLAB_PANIC,
  						NULL);
 +#if defined(CONFIG_IMQ) || defined(CONFIG_IMQ_MODULE)
-+skbuff_cb_store_cache = kmem_cache_create("skbuff_cb_store_cache",
++	skbuff_cb_store_cache = kmem_cache_create("skbuff_cb_store_cache",
 +						sizeof(struct skb_cb_table),
 +						0,
 +						SLAB_HWCACHE_ALIGN|SLAB_PANIC,
@@ -1279,7 +1278,7 @@ index 6148716..718d46a 100644
  }
  
  /**
-@@ -3351,6 +3387,82 @@ void skb_complete_wifi_ack(struct sk_buff *skb, bool acked)
+@@ -3393,6 +3429,82 @@ void skb_complete_wifi_ack(struct sk_buff *skb, bool acked)
  }
  EXPORT_SYMBOL_GPL(skb_complete_wifi_ack);
  
@@ -1363,10 +1362,10 @@ index 6148716..718d46a 100644
  /**
   * skb_partial_csum_set - set up and verify partial csum values for packet
 diff --git a/net/ipv6/ip6_output.c b/net/ipv6/ip6_output.c
-index 1ce7ea1..a0c3b44 100644
+index 8559572..00a3adf 100644
 --- a/net/ipv6/ip6_output.c
 +++ b/net/ipv6/ip6_output.c
-@@ -89,9 +89,6 @@ static int ip6_finish_output2(struct sk_buff *skb)
+@@ -64,9 +64,6 @@ static int ip6_finish_output2(struct sk_buff *skb)
  	struct in6_addr *nexthop;
  	int ret;
  
@@ -1376,7 +1375,7 @@ index 1ce7ea1..a0c3b44 100644
  	if (ipv6_addr_is_multicast(&ipv6_hdr(skb)->daddr)) {
  		struct inet6_dev *idev = ip6_dst_idev(skb_dst(skb));
  
-@@ -168,6 +165,13 @@ int ip6_output(struct sk_buff *skb)
+@@ -143,6 +140,13 @@ int ip6_output(struct sk_buff *skb)
  		return 0;
  	}
  
@@ -1391,10 +1390,10 @@ index 1ce7ea1..a0c3b44 100644
  			    ip6_finish_output,
  			    !(IP6CB(skb)->flags & IP6SKB_REROUTED));
 diff --git a/net/netfilter/Kconfig b/net/netfilter/Kconfig
-index 56d22ca..58f40f8 100644
+index 6e839b6..45ac31c 100644
 --- a/net/netfilter/Kconfig
 +++ b/net/netfilter/Kconfig
-@@ -641,6 +641,18 @@ config NETFILTER_XT_TARGET_LOG
+@@ -630,6 +630,18 @@ config NETFILTER_XT_TARGET_LOG
  
  	  To compile it as a module, choose M here.  If unsure, say N.
  
@@ -1414,7 +1413,7 @@ index 56d22ca..58f40f8 100644
  	tristate '"MARK" target support'
  	depends on NETFILTER_ADVANCED
 diff --git a/net/netfilter/Makefile b/net/netfilter/Makefile
-index a1abf87..2c0cbf4 100644
+index c3a0a12..9647f06 100644
 --- a/net/netfilter/Makefile
 +++ b/net/netfilter/Makefile
 @@ -82,6 +82,7 @@ obj-$(CONFIG_NETFILTER_XT_TARGET_CT) += xt_CT.o
@@ -1426,7 +1425,7 @@ index a1abf87..2c0cbf4 100644
  obj-$(CONFIG_NETFILTER_XT_TARGET_LOG) += xt_LOG.o
  obj-$(CONFIG_NETFILTER_XT_TARGET_NETMAP) += xt_NETMAP.o
 diff --git a/net/netfilter/core.c b/net/netfilter/core.c
-index 857ca9f..93fe11b 100644
+index 593b16e..740cd69 100644
 --- a/net/netfilter/core.c
 +++ b/net/netfilter/core.c
 @@ -191,9 +191,11 @@ next_hook:
