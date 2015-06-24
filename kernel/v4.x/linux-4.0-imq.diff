@@ -1212,30 +1212,6 @@ index 0000000..1babb09
 +
 +#endif /* _IMQ_H */
 +
-diff --git a/include/linux/netdevice.h b/include/linux/netdevice.h
-index 2787388..730d87b 100644
---- a/include/linux/netdevice.h
-+++ b/include/linux/netdevice.h
-@@ -3272,6 +3272,19 @@ static inline void netif_tx_unlock_bh(struct net_device *dev)
- 	}						\
- }
- 
-+#define HARD_TX_LOCK_BH(dev, txq) {           \
-+    if ((dev->features & NETIF_F_LLTX) == 0) {  \
-+        __netif_tx_lock_bh(txq);      \
-+    }                       \
-+}
-+
-+#define HARD_TX_UNLOCK_BH(dev, txq) {          \
-+    if ((dev->features & NETIF_F_LLTX) == 0) {  \
-+        __netif_tx_unlock_bh(txq);         \
-+    }                       \
-+}
-+
-+
- static inline void netif_tx_disable(struct net_device *dev)
- {
- 	unsigned int i;
 diff --git a/include/linux/netfilter/xt_IMQ.h b/include/linux/netfilter/xt_IMQ.h
 new file mode 100644
 index 0000000..9b07230
@@ -1396,7 +1372,7 @@ index ef1b1f8..079e5ff 100644
  /* we overload the higher bits for encoding auxiliary data such as the queue
   * number or errno values. Not nice, but better than additional function
 diff --git a/net/core/dev.c b/net/core/dev.c
-index 22a53ac..0bdb8cb 100644
+index e977e15..d58a569 100644
 --- a/net/core/dev.c
 +++ b/net/core/dev.c
 @@ -135,6 +135,9 @@
@@ -1439,10 +1415,10 @@ index 22a53ac..0bdb8cb 100644
  static void qdisc_pkt_len_init(struct sk_buff *skb)
  {
 diff --git a/net/core/skbuff.c b/net/core/skbuff.c
-index e9f9a15..840ce41 100644
+index e9f9a15..a3bbe1f 100644
 --- a/net/core/skbuff.c
 +++ b/net/core/skbuff.c
-@@ -79,6 +79,86 @@
+@@ -79,6 +79,77 @@
  
  struct kmem_cache *skbuff_head_cache __read_mostly;
  static struct kmem_cache *skbuff_fclone_cache __read_mostly;
@@ -1457,8 +1433,6 @@ index e9f9a15..840ce41 100644
 +	void			*cb_next;
 +	atomic_t		refcnt;
 +};
-+
-+static DEFINE_SPINLOCK(skb_cb_store_lock);
 +
 +int skb_save_cb(struct sk_buff *skb)
 +{
@@ -1494,12 +1468,8 @@ index e9f9a15..840ce41 100644
 +	memcpy(skb->cb, next->cb, sizeof(skb->cb));
 +	skb->cb_next = next->cb_next;
 +
-+	spin_lock(&skb_cb_store_lock);
-+
 +	if (atomic_dec_and_test(&next->refcnt))
 +		kmem_cache_free(skbuff_cb_store_cache, next);
-+
-+	spin_unlock(&skb_cb_store_lock);
 +
 +	return 0;
 +}
@@ -1515,21 +1485,18 @@ index e9f9a15..840ce41 100644
 +		return;
 +	}
 +
-+	spin_lock(&skb_cb_store_lock);
-+
 +	old = (struct sk_buff *)__old;
 +
 +	next = old->cb_next;
 +	atomic_inc(&next->refcnt);
++	wmb();
 +	new->cb_next = next;
-+
-+	spin_unlock(&skb_cb_store_lock);
 +}
 +#endif
  
  /**
   *	skb_panic - private function for out-of-line support
-@@ -691,6 +771,28 @@ static void skb_release_head_state(struct sk_buff *skb)
+@@ -691,6 +762,28 @@ static void skb_release_head_state(struct sk_buff *skb)
  		WARN_ON(in_irq());
  		skb->destructor(skb);
  	}
@@ -1558,7 +1525,7 @@ index e9f9a15..840ce41 100644
  #if IS_ENABLED(CONFIG_NF_CONNTRACK)
  	nf_conntrack_put(skb->nfct);
  #endif
-@@ -813,6 +915,10 @@ static void __copy_skb_header(struct sk_buff *new, const struct sk_buff *old)
+@@ -813,6 +906,10 @@ static void __copy_skb_header(struct sk_buff *new, const struct sk_buff *old)
  	new->sp			= secpath_get(old->sp);
  #endif
  	__nf_copy(new, old, false);
@@ -1569,7 +1536,7 @@ index e9f9a15..840ce41 100644
  
  	/* Note : this field could be in headers_start/headers_end section
  	 * It is not yet because we do not want to have a 16 bit hole
-@@ -3386,6 +3492,13 @@ void __init skb_init(void)
+@@ -3386,6 +3483,13 @@ void __init skb_init(void)
  						0,
  						SLAB_HWCACHE_ALIGN|SLAB_PANIC,
  						NULL);
