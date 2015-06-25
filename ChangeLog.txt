@@ -1,7 +1,7 @@
 IMQ changelog:
 --------------
 2015-06-25
-		Feng Gao add one new parameter of IMQ module(4.0), imq_dev_accurate_stats (default is 1).
+		Feng Gao add one new parameter of IMQ module(3.18,4.0,and 4.1), imq_dev_accurate_stats (default is 1).
 		It is used to notify if IMQ get the accurate stats. 
 		When imq_dev_accurate_stats is 0, it could avoid one spin to enhance the performance.
 

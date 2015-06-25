@@ -1,5 +1,5 @@
 diff --git a/drivers/net/Kconfig b/drivers/net/Kconfig
-index df51d60..d3db495 100644
+index df51d60..e937550 100644
 --- a/drivers/net/Kconfig
 +++ b/drivers/net/Kconfig
 @@ -220,6 +220,125 @@ config RIONET_RX_SIZE
@@ -142,10 +142,10 @@ index e25fdd7..b411742 100644
  obj-$(CONFIG_MII) += mii.o
 diff --git a/drivers/net/imq.c b/drivers/net/imq.c
 new file mode 100644
-index 0000000..1f160c2
+index 0000000..b010f39
 --- /dev/null
 +++ b/drivers/net/imq.c
-@@ -0,0 +1,1049 @@
+@@ -0,0 +1,903 @@
 +/*
 + *             Pseudo-driver for the intermediate queue device.
 + *
@@ -254,6 +254,7 @@ index 0000000..1f160c2
 +#define IMQ_MAX_QUEUES 32
 +static int numqueues = 1;
 +static u32 imq_hashrnd;
++static int imq_dev_accurate_stats = 1;
 +
 +static inline __be16 pppoe_proto(const struct sk_buff *skb)
 +{
@@ -795,12 +796,12 @@ index 0000000..1f160c2
 +				IMQ device will not be frozen or stoped, and it always be successful.
 +				So we need not check its status and return value to accelerate.
 +				*/
-+				if (unlikely(txq->xmit_lock_owner == cpu)) {
-+					dev_hard_start_xmit(skb_popd, dev, txq, &dummy_ret);
-+				} else {
++				if (imq_dev_accurate_stats && txq->xmit_lock_owner != cpu) {
 +					HARD_TX_LOCK(dev, txq, cpu);
 +					dev_hard_start_xmit(skb_popd, dev, txq, &dummy_ret);
 +					HARD_TX_UNLOCK(dev, txq);
++				} else {
++					dev_hard_start_xmit(skb_popd, dev, txq, &dummy_ret);
 +				}
 +			}
 +		}
@@ -998,8 +999,8 @@ index 0000000..1f160c2
 +		return err;
 +	}
 +
-+	pr_info("IMQ driver loaded successfully. (numdevs = %d, numqueues = %d)\n",
-+		numdevs, numqueues);
++	pr_info("IMQ driver loaded successfully. (numdevs = %d, numqueues = %d, imq_dev_accurate_stats = %d)\n",
++		numdevs, numqueues, imq_dev_accurate_stats);
 +
 +#if defined(CONFIG_IMQ_BEHAVIOR_BA) || defined(CONFIG_IMQ_BEHAVIOR_BB)
 +	pr_info("\tHooking IMQ before NAT on PREROUTING.\n");
@@ -1039,13 +1040,15 @@ index 0000000..1f160c2
 +
 +module_param(numdevs, int, 0);
 +module_param(numqueues, int, 0);
++module_param(imq_dev_accurate_stats, int, 0);
 +MODULE_PARM_DESC(numdevs, "number of IMQ devices (how many imq* devices will be created)");
 +MODULE_PARM_DESC(numqueues, "number of queues per IMQ device");
++MODULE_PARM_DESC(imq_dev_accurate_stats, "Notify if need the accurate imq device stats");
++
 +MODULE_AUTHOR("http://https://github.com/imq/linuximq");
 +MODULE_DESCRIPTION("Pseudo-driver for the intermediate queue device. See https://github.com/imq/linuximq/wiki for more information.");
 +MODULE_LICENSE("GPL");
 +MODULE_ALIAS_RTNL_LINK("imq");
-+
 diff --git a/include/linux/imq.h b/include/linux/imq.h
 new file mode 100644
 index 0000000..1babb09
@@ -1601,7 +1604,7 @@ index 2e88032..8524715 100644
  				goto next_hook;
 diff --git a/net/netfilter/xt_IMQ.c b/net/netfilter/xt_IMQ.c
 new file mode 100644
-index 0000000..1c3cd66
+index 0000000..86d7b84
 --- /dev/null
 +++ b/net/netfilter/xt_IMQ.c
 @@ -0,0 +1,72 @@
