@@ -1,5 +1,10 @@
 IMQ changelog:
 --------------
+2015-06-25
+		Feng Gao add one new parameter of IMQ module(4.0), imq_dev_accurate_stats (default is 1).
+		It is used to notify if IMQ get the accurate stats. 
+		When imq_dev_accurate_stats is 0, it could avoid one spin to enhance the performance.
+
 2015-06-24
 		Feng Gao removed usless skb_cb_store_lock of 4.0 patch. It will be merged into other patches if it is ok.
 		Fixed malformed linux-3.2-imq.diff, linux-3.10-imq.diff, linux-3.12-imq.diff
