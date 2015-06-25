@@ -142,10 +142,10 @@ index 61aefdd..41be5b8 100644
  obj-$(CONFIG_MII) += mii.o
 diff --git a/drivers/net/imq.c b/drivers/net/imq.c
 new file mode 100644
-index 0000000..ab07499
+index 0000000..90b0148
 --- /dev/null
 +++ b/drivers/net/imq.c
-@@ -0,0 +1,898 @@
+@@ -0,0 +1,901 @@
 +/*
 + *             Pseudo-driver for the intermediate queue device.
 + *
@@ -254,6 +254,7 @@ index 0000000..ab07499
 +#define IMQ_MAX_QUEUES 32
 +static int numqueues = 1;
 +static u32 imq_hashrnd;
++static int imq_dev_accurate_stats = 1;
 +
 +static inline __be16 pppoe_proto(const struct sk_buff *skb)
 +{
@@ -794,13 +795,13 @@ index 0000000..ab07499
 +				IMQ device will not be frozen or stoped, and it always be successful.
 +				So we need not check its status and return value to accelerate.
 +				*/
-+				if (unlikely(txq->xmit_lock_owner == cpu)) {
-+					dev_hard_start_xmit(skb_popd, dev, txq, &dummy_ret);
-+				} else {
++				if (imq_dev_accurate_stats && txq->xmit_lock_owner != cpu) {
 +					HARD_TX_LOCK(dev, txq, cpu);
 +					dev_hard_start_xmit(skb_popd, dev, txq, &dummy_ret);
 +					HARD_TX_UNLOCK(dev, txq);
-+				}
++				} else {
++					dev_hard_start_xmit(skb_popd, dev, txq, &dummy_ret);
++				} 
 +			}
 +		}
 +#endif
@@ -1001,8 +1002,8 @@ index 0000000..ab07499
 +		return err;
 +	}
 +
-+	pr_info("IMQ driver loaded successfully. (numdevs = %d, numqueues = %d)\n",
-+		numdevs, numqueues);
++	pr_info("IMQ driver loaded successfully. (numdevs = %d, numqueues = %d, imq_dev_accurate_stats = %d)\n",
++		numdevs, numqueues, imq_dev_accurate_stats);
 +
 +#if defined(CONFIG_IMQ_BEHAVIOR_BA) || defined(CONFIG_IMQ_BEHAVIOR_BB)
 +	pr_info("\tHooking IMQ before NAT on PREROUTING.\n");
@@ -1042,8 +1043,10 @@ index 0000000..ab07499
 +
 +module_param(numdevs, int, 0);
 +module_param(numqueues, int, 0);
++module_param(imq_dev_accurate_stats, int, 0);
 +MODULE_PARM_DESC(numdevs, "number of IMQ devices (how many imq* devices will be created)");
 +MODULE_PARM_DESC(numqueues, "number of queues per IMQ device");
++MODULE_PARM_DESC(imq_dev_accurate_stats, "Notify if need the accurate imq device stats");
 diff --git a/include/linux/imq.h b/include/linux/imq.h
 new file mode 100644
 index 0000000..1babb09
@@ -1289,10 +1292,10 @@ index 5cdbc1b..19fd9f0 100644
  static void qdisc_pkt_len_init(struct sk_buff *skb)
  {
 diff --git a/net/core/skbuff.c b/net/core/skbuff.c
-index 02ebb71..5275d94 100644
+index 02ebb71..5f33f3f 100644
 --- a/net/core/skbuff.c
 +++ b/net/core/skbuff.c
-@@ -77,6 +77,87 @@
+@@ -77,6 +77,79 @@
  
  struct kmem_cache *skbuff_head_cache __read_mostly;
  static struct kmem_cache *skbuff_fclone_cache __read_mostly;
@@ -1307,8 +1310,6 @@ index 02ebb71..5275d94 100644
 +	void            *cb_next;
 +	atomic_t        refcnt;
 +};
-+
-+static DEFINE_SPINLOCK(skb_cb_store_lock);
 +
 +int skb_save_cb(struct sk_buff *skb)
 +{
@@ -1344,12 +1345,8 @@ index 02ebb71..5275d94 100644
 +	memcpy(skb->cb, next->cb, sizeof(skb->cb));
 +	skb->cb_next = next->cb_next;
 +
-+	spin_lock(&skb_cb_store_lock);
-+
 +	if (atomic_dec_and_test(&next->refcnt))
 +		kmem_cache_free(skbuff_cb_store_cache, next);
-+
-+	spin_unlock(&skb_cb_store_lock);
 +
 +	return 0;
 +}
@@ -1365,22 +1362,20 @@ index 02ebb71..5275d94 100644
 +		return;
 +	}
 +
-+	spin_lock(&skb_cb_store_lock);
-+
 +	old = (struct sk_buff *)__old;
 +
 +	next = old->cb_next;
 +	atomic_inc(&next->refcnt);
++	wmb();
 +	new->cb_next = next;
 +
-+	spin_unlock(&skb_cb_store_lock);
 +}
 +#endif
 +
  
  /**
   *	skb_panic - private function for out-of-line support
-@@ -591,6 +672,28 @@ static void skb_release_head_state(struct sk_buff *skb)
+@@ -591,6 +664,28 @@ static void skb_release_head_state(struct sk_buff *skb)
  		WARN_ON(in_irq());
  		skb->destructor(skb);
  	}
@@ -1409,7 +1404,7 @@ index 02ebb71..5275d94 100644
  #if IS_ENABLED(CONFIG_NF_CONNTRACK)
  	nf_conntrack_put(skb->nfct);
  #endif
-@@ -715,6 +818,10 @@ static void __copy_skb_header(struct sk_buff *new, const struct sk_buff *old)
+@@ -715,6 +810,10 @@ static void __copy_skb_header(struct sk_buff *new, const struct sk_buff *old)
  	/* We do not copy old->sk */
  	new->dev		= old->dev;
  	memcpy(new->cb, old->cb, sizeof(old->cb));
@@ -1420,7 +1415,7 @@ index 02ebb71..5275d94 100644
  	skb_dst_copy(new, old);
  #ifdef CONFIG_XFRM
  	new->sp			= secpath_get(old->sp);
-@@ -3280,6 +3387,13 @@ void __init skb_init(void)
+@@ -3280,6 +3379,13 @@ void __init skb_init(void)
  						0,
  						SLAB_HWCACHE_ALIGN|SLAB_PANIC,
  						NULL);
