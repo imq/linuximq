@@ -145,7 +145,7 @@ new file mode 100644
 index 0000000..90b0148
 --- /dev/null
 +++ b/drivers/net/imq.c
-@@ -0,0 +1,902 @@
+@@ -0,0 +1,903 @@
 +/*
 + *             Pseudo-driver for the intermediate queue device.
 + *
@@ -1042,6 +1042,7 @@ index 0000000..90b0148
 +module_exit(imq_exit_module);
 +
 +MODULE_LICENSE("GPL");
+++MODULE_ALIAS_RTNL_LINK("imq");
 +module_param(numdevs, int, 0);
 +module_param(numqueues, int, 0);
 +module_param(imq_dev_accurate_stats, int, 0);
