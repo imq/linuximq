@@ -1042,7 +1042,7 @@ index 0000000..90b0148
 +module_exit(imq_exit_module);
 +
 +MODULE_LICENSE("GPL");
-++MODULE_ALIAS_RTNL_LINK("imq");
++MODULE_ALIAS_RTNL_LINK("imq");
 +module_param(numdevs, int, 0);
 +module_param(numqueues, int, 0);
 +module_param(imq_dev_accurate_stats, int, 0);
