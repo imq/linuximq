@@ -142,10 +142,10 @@ index e25fdd7..b411742 100644
  obj-$(CONFIG_MII) += mii.o
 diff --git a/drivers/net/imq.c b/drivers/net/imq.c
 new file mode 100644
-index 0000000..6692f5d
+index 0000000..f4aff23
 --- /dev/null
 +++ b/drivers/net/imq.c
-@@ -0,0 +1,900 @@
+@@ -0,0 +1,904 @@
 +/*
 + *             Pseudo-driver for the intermediate queue device.
 + *
@@ -794,10 +794,14 @@ index 0000000..6692f5d
 + 				*/
 +				if (imq_dev_accurate_stats && txq->xmit_lock_owner != cpu) {
 +					HARD_TX_LOCK(dev, txq, cpu);
-+					dev_hard_start_xmit(skb_popd, dev, txq, &dummy_ret);
++					if (!netif_xmit_frozen_or_stopped(txq)) {
++						dev_hard_start_xmit(skb_popd, dev, txq, &dummy_ret);
++					}
 +					HARD_TX_UNLOCK(dev, txq);
 +				} else {
-+					dev_hard_start_xmit(skb_popd, dev, txq, &dummy_ret);
++					if (!netif_xmit_frozen_or_stopped(txq)) {
++						dev_hard_start_xmit(skb_popd, dev, txq, &dummy_ret);
++					}
 +				}
 +			}
 +		}
