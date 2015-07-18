@@ -142,10 +142,10 @@ index 61aefdd..41be5b8 100644
  obj-$(CONFIG_MII) += mii.o
 diff --git a/drivers/net/imq.c b/drivers/net/imq.c
 new file mode 100644
-index 0000000..211f348
+index 0000000..6e7f50f
 --- /dev/null
 +++ b/drivers/net/imq.c
-@@ -0,0 +1,907 @@
+@@ -0,0 +1,910 @@
 +/*
 + *             Pseudo-driver for the intermediate queue device.
 + *
@@ -806,6 +806,9 @@ index 0000000..211f348
 +						dev_hard_start_xmit(skb_popd, dev, txq, &dummy_ret);
 +					}
 +				} 
++			} else {
++				/* No skb now, then schedule it */
++				__netif_schedule(q);
 +			}
 +		}
 +#endif
