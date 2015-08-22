@@ -142,10 +142,10 @@ index c12cb22..03b82c6 100644
  obj-$(CONFIG_MII) += mii.o
 diff --git a/drivers/net/imq.c b/drivers/net/imq.c
 new file mode 100644
-index 0000000..e839cca
+index 0000000..6fe32b0
 --- /dev/null
 +++ b/drivers/net/imq.c
-@@ -0,0 +1,912 @@
+@@ -0,0 +1,902 @@
 +/*
 + *             Pseudo-driver for the intermediate queue device.
 + *
@@ -744,6 +744,7 @@ index 0000000..e839cca
 +	rcu_read_lock_bh();
 +
 +	/* Multi-queue selection */
++	skb->destructor = &imq_skb_destructor;
 +	orig_queue_index = skb_get_queue_mapping(skb);
 +	cl = rcu_dereference_bh(skb->dev->ingress_cl_list);
 +	if (unlikely(!cl))
@@ -765,8 +766,6 @@ index 0000000..e839cca
 +		bool validate;
 +
 +		kfree_skb(skb_shared); /* decrease reference count by one */
-+
-+		skb->destructor = &imq_skb_destructor;
 +
 +		txq = imq_select_queue(dev, skb);
 +    	q = rcu_dereference(txq->qdisc);
@@ -819,16 +818,7 @@ index 0000000..e839cca
 +		rcu_read_unlock_bh();
 +		retval = 0;
 +		goto out;
-+	} else {
-+		skb_restore_cb(skb_shared); /* restore skb->cb */
-+		skb->nf_queue_entry = NULL;
-+		/*
-+		 * qdisc dropped packet and decreased skb reference count of
-+		 * skb, so we don't really want to and try refree as that would
-+		 * actually destroy the skb.
-+		 */
-+		goto packet_not_eaten_by_imq_dev;
-+	}
++	} 
 +
 +packet_not_eaten_by_imq_dev:
 +	skb_set_queue_mapping(skb, orig_queue_index);
