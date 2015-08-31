@@ -1305,7 +1305,7 @@ diff --git a/net/core/skbuff.c b/net/core/skbuff.c
 index 41ec022..307f02d 100644
 --- a/net/core/skbuff.c
 +++ b/net/core/skbuff.c
-@@ -79,6 +79,86 @@
+@@ -79,6 +79,87 @@
  
  struct kmem_cache *skbuff_head_cache __read_mostly;
  static struct kmem_cache *skbuff_fclone_cache __read_mostly;
@@ -1368,6 +1368,7 @@ index 41ec022..307f02d 100644
 +}
 +EXPORT_SYMBOL(skb_restore_cb);
 +
++static void skb_copy_stored_cb(struct sk_buff *   , const struct sk_buff *     ) __attribute__ ((unused));
 +static void skb_copy_stored_cb(struct sk_buff *new, const struct sk_buff *__old)
 +{
 +	struct skb_cb_table *next;
@@ -1392,7 +1393,7 @@ index 41ec022..307f02d 100644
  
  /**
   *	skb_panic - private function for out-of-line support
-@@ -691,6 +771,28 @@ static void skb_release_head_state(struct sk_buff *skb)
+@@ -691,6 +772,28 @@
  		WARN_ON(in_irq());
  		skb->destructor(skb);
  	}
@@ -1404,7 +1405,7 @@ index 41ec022..307f02d 100644
 +	while (skb->cb_next != NULL) {
 +		if (net_ratelimit())
 +			pr_warn("IMQ: kfree_skb: skb->cb_next: %08x\n",
-+				(unsigned int)skb->cb_next);
++				(unsigned int)(uintptr_t)skb->cb_next);
 +
 +		skb_restore_cb(skb);
 +	}
@@ -1421,7 +1422,7 @@ index 41ec022..307f02d 100644
  #if IS_ENABLED(CONFIG_NF_CONNTRACK)
  	nf_conntrack_put(skb->nfct);
  #endif
-@@ -813,6 +915,10 @@ static void __copy_skb_header(struct sk_buff *new, const struct sk_buff *old)
+@@ -813,6 +916,10 @@
  	new->sp			= secpath_get(old->sp);
  #endif
  	__nf_copy(new, old, false);
@@ -1432,7 +1433,7 @@ index 41ec022..307f02d 100644
  
  	/* Note : this field could be in headers_start/headers_end section
  	 * It is not yet because we do not want to have a 16 bit hole
-@@ -3342,6 +3448,13 @@ void __init skb_init(void)
+@@ -3342,6 +3449,13 @@
  						0,
  						SLAB_HWCACHE_ALIGN|SLAB_PANIC,
  						NULL);
