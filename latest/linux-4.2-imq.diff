@@ -141,11 +141,11 @@ index c12cb22..03b82c6 100644
  obj-$(CONFIG_MACVTAP) += macvtap.o
  obj-$(CONFIG_MII) += mii.o
 diff --git a/drivers/net/imq.c b/drivers/net/imq.c
-new file mode 100644
-index 0000000..6fe32b0
+new file mode 100755
+index 0000000..fc7f1eb
 --- /dev/null
 +++ b/drivers/net/imq.c
-@@ -0,0 +1,902 @@
+@@ -0,0 +1,911 @@
 +/*
 + *             Pseudo-driver for the intermediate queue device.
 + *
@@ -724,8 +724,6 @@ index 0000000..6fe32b0
 +		entry->skb = skb;
 +	}
 +
-+	skb->nf_queue_entry = entry;
-+
 +	dev->stats.rx_bytes += skb->len;
 +	dev->stats.rx_packets++;
 +
@@ -744,12 +742,12 @@ index 0000000..6fe32b0
 +	rcu_read_lock_bh();
 +
 +	/* Multi-queue selection */
-+	skb->destructor = &imq_skb_destructor;
 +	orig_queue_index = skb_get_queue_mapping(skb);
 +	cl = rcu_dereference_bh(skb->dev->ingress_cl_list);
 +	if (unlikely(!cl))
 +		goto packet_not_eaten_by_imq_dev;
-+
++	
++	skb->nf_queue_entry = entry;
 +	users = atomic_read(&skb->users);
 +	skb_shared = skb_get(skb); /* increase reference count by one */
 +
@@ -766,6 +764,8 @@ index 0000000..6fe32b0
 +		bool validate;
 +
 +		kfree_skb(skb_shared); /* decrease reference count by one */
++
++		skb->destructor = &imq_skb_destructor;
 +
 +		txq = imq_select_queue(dev, skb);
 +    	q = rcu_dereference(txq->qdisc);
@@ -818,7 +818,16 @@ index 0000000..6fe32b0
 +		rcu_read_unlock_bh();
 +		retval = 0;
 +		goto out;
-+	} 
++	} else {
++		skb_restore_cb(skb_shared); /* restore skb->cb */
++		skb->nf_queue_entry = NULL;
++		/*
++		 * qdisc dropped packet and decreased skb reference count of
++		 * skb, so we don't really want to and try refree as that would
++		 * actually destroy the skb.
++		 */
++		goto packet_not_eaten_by_imq_dev;
++	}
 +
 +packet_not_eaten_by_imq_dev:
 +	skb_set_queue_mapping(skb, orig_queue_index);
@@ -1139,7 +1148,7 @@ index 0000000..198ac01
 +#endif /* _IP6T_IMQ_H */
 +
 diff --git a/include/linux/skbuff.h b/include/linux/skbuff.h
-index d6cdd6e..1868418 100644
+index 9b88536..61686b0 100644
 --- a/include/linux/skbuff.h
 +++ b/include/linux/skbuff.h
 @@ -37,6 +37,9 @@
@@ -1195,7 +1204,7 @@ index d6cdd6e..1868418 100644
  extern struct kmem_cache *skbuff_head_cache;
  
  void kfree_skb_partial(struct sk_buff *skb, bool head_stolen);
-@@ -3236,6 +3254,10 @@ static inline void __nf_copy(struct sk_buff *dst, const struct sk_buff *src,
+@@ -3232,6 +3250,10 @@ static inline void __nf_copy(struct sk_buff *dst, const struct sk_buff *src,
  	if (copy)
  		dst->nfctinfo = src->nfctinfo;
  #endif
@@ -1294,7 +1303,7 @@ index a8e4dd4..f84cd5a 100644
  static void qdisc_pkt_len_init(struct sk_buff *skb)
  {
 diff --git a/net/core/skbuff.c b/net/core/skbuff.c
-index b6a19ca..1481530 100644
+index 7b84330..75722d1 100644
 --- a/net/core/skbuff.c
 +++ b/net/core/skbuff.c
 @@ -79,6 +79,86 @@
