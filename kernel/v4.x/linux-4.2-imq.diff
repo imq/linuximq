@@ -141,11 +141,11 @@ index c12cb22..03b82c6 100644
  obj-$(CONFIG_MACVTAP) += macvtap.o
  obj-$(CONFIG_MII) += mii.o
 diff --git a/drivers/net/imq.c b/drivers/net/imq.c
-new file mode 100644
-index 0000000..e839cca
+new file mode 100755
+index 0000000..fc7f1eb
 --- /dev/null
 +++ b/drivers/net/imq.c
-@@ -0,0 +1,912 @@
+@@ -0,0 +1,911 @@
 +/*
 + *             Pseudo-driver for the intermediate queue device.
 + *
@@ -724,8 +724,6 @@ index 0000000..e839cca
 +		entry->skb = skb;
 +	}
 +
-+	skb->nf_queue_entry = entry;
-+
 +	dev->stats.rx_bytes += skb->len;
 +	dev->stats.rx_packets++;
 +
@@ -748,7 +746,8 @@ index 0000000..e839cca
 +	cl = rcu_dereference_bh(skb->dev->ingress_cl_list);
 +	if (unlikely(!cl))
 +		goto packet_not_eaten_by_imq_dev;
-+
++	
++	skb->nf_queue_entry = entry;
 +	users = atomic_read(&skb->users);
 +	skb_shared = skb_get(skb); /* increase reference count by one */
 +
@@ -1149,7 +1148,7 @@ index 0000000..198ac01
 +#endif /* _IP6T_IMQ_H */
 +
 diff --git a/include/linux/skbuff.h b/include/linux/skbuff.h
-index d6cdd6e..1868418 100644
+index 9b88536..61686b0 100644
 --- a/include/linux/skbuff.h
 +++ b/include/linux/skbuff.h
 @@ -37,6 +37,9 @@
@@ -1205,7 +1204,7 @@ index d6cdd6e..1868418 100644
  extern struct kmem_cache *skbuff_head_cache;
  
  void kfree_skb_partial(struct sk_buff *skb, bool head_stolen);
-@@ -3236,6 +3254,10 @@ static inline void __nf_copy(struct sk_buff *dst, const struct sk_buff *src,
+@@ -3232,6 +3250,10 @@ static inline void __nf_copy(struct sk_buff *dst, const struct sk_buff *src,
  	if (copy)
  		dst->nfctinfo = src->nfctinfo;
  #endif
@@ -1304,7 +1303,7 @@ index a8e4dd4..f84cd5a 100644
  static void qdisc_pkt_len_init(struct sk_buff *skb)
  {
 diff --git a/net/core/skbuff.c b/net/core/skbuff.c
-index b6a19ca..1481530 100644
+index 7b84330..75722d1 100644
 --- a/net/core/skbuff.c
 +++ b/net/core/skbuff.c
 @@ -79,6 +79,86 @@
