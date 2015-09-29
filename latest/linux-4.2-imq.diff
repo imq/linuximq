@@ -141,11 +141,11 @@ index c12cb22..03b82c6 100644
  obj-$(CONFIG_MACVTAP) += macvtap.o
  obj-$(CONFIG_MII) += mii.o
 diff --git a/drivers/net/imq.c b/drivers/net/imq.c
-new file mode 100755
-index 0000000..fc7f1eb
+new file mode 100644
+index 0000000..c60929b
 --- /dev/null
 +++ b/drivers/net/imq.c
-@@ -0,0 +1,911 @@
+@@ -0,0 +1,908 @@
 +/*
 + *             Pseudo-driver for the intermediate queue device.
 + *
@@ -701,11 +701,12 @@ index 0000000..fc7f1eb
 +static int __imq_nf_queue(struct nf_queue_entry *entry, struct net_device *dev)
 +{
 +	struct sk_buff *skb_orig, *skb, *skb_shared, *skb_popd;
++	struct Qdisc *q;
++	struct netdev_queue *txq;
++	spinlock_t *root_lock;
 +	int users;
 +	int retval = -EINVAL;
 +	unsigned int orig_queue_index;
-+	struct tcf_proto *cl;
-+	struct tcf_result cl_res;
 +
 +	dev->last_rx = jiffies;
 +
@@ -743,35 +744,30 @@ index 0000000..fc7f1eb
 +
 +	/* Multi-queue selection */
 +	orig_queue_index = skb_get_queue_mapping(skb);
-+	cl = rcu_dereference_bh(skb->dev->ingress_cl_list);
-+	if (unlikely(!cl))
++	txq = imq_select_queue(dev, skb);
++
++	q = rcu_dereference(txq->qdisc);
++	if (unlikely(!q->enqueue))
 +		goto packet_not_eaten_by_imq_dev;
-+	
++
 +	skb->nf_queue_entry = entry;
++	root_lock = qdisc_lock(q);
++	spin_lock(root_lock);
++
 +	users = atomic_read(&skb->users);
++
 +	skb_shared = skb_get(skb); /* increase reference count by one */
 +
 +	/* backup skb->cb, as qdisc layer will overwrite it */
 +	skb_save_cb(skb_shared);
-+	qdisc_skb_cb(skb)->pkt_len = skb->len;
-+	qdisc_bstats_update_cpu(cl->q, skb);
-+	tc_classify(skb, cl, &cl_res);
-+
++	qdisc_enqueue_root(skb_shared, q); /* might kfree_skb */
 +	if (likely(atomic_read(&skb_shared->users) == users + 1)) {
-+		spinlock_t *root_lock;
-+		struct Qdisc *q;
-+		struct netdev_queue *txq;
 +		bool validate;
 +
 +		kfree_skb(skb_shared); /* decrease reference count by one */
 +
 +		skb->destructor = &imq_skb_destructor;
 +
-+		txq = imq_select_queue(dev, skb);
-+    	q = rcu_dereference(txq->qdisc);
-+
-+		root_lock = qdisc_lock(q);
-+		spin_lock(root_lock);
 +		skb_popd = qdisc_dequeue_skb(q, &validate);
 +
 +		/* cloned? */
@@ -826,6 +822,7 @@ index 0000000..fc7f1eb
 +		 * skb, so we don't really want to and try refree as that would
 +		 * actually destroy the skb.
 +		 */
++		spin_unlock(root_lock);
 +		goto packet_not_eaten_by_imq_dev;
 +	}
 +
@@ -1245,6 +1242,23 @@ index 2342bf1..149dec9 100644
  static inline void qdisc_run(struct Qdisc *q)
  {
  	if (qdisc_run_begin(q))
+diff --git a/include/net/sch_generic.h b/include/net/sch_generic.h
+index 2738f6f..cc0af3e 100644
+--- a/include/net/sch_generic.h
++++ b/include/net/sch_generic.h
+@@ -501,6 +501,12 @@ static inline int qdisc_enqueue(struct sk_buff *skb, struct Qdisc *sch)
+ 	return sch->enqueue(skb, sch);
+ }
+ 
++static inline int qdisc_enqueue_root(struct sk_buff *skb, struct Qdisc *sch)
++{
++    qdisc_skb_cb(skb)->pkt_len = skb->len;
++    return qdisc_enqueue(skb, sch) & NET_XMIT_MASK;
++}
++
+ static inline bool qdisc_is_percpu_stats(const struct Qdisc *q)
+ {
+ 	return q->flags & TCQ_F_CPUSTATS;
 diff --git a/include/uapi/linux/netfilter.h b/include/uapi/linux/netfilter.h
 index d93f949..23fb6d1 100644
 --- a/include/uapi/linux/netfilter.h
@@ -1303,10 +1317,10 @@ index a8e4dd4..f84cd5a 100644
  static void qdisc_pkt_len_init(struct sk_buff *skb)
  {
 diff --git a/net/core/skbuff.c b/net/core/skbuff.c
-index 7b84330..75722d1 100644
+index 7b84330..a313d22 100644
 --- a/net/core/skbuff.c
 +++ b/net/core/skbuff.c
-@@ -79,6 +79,86 @@
+@@ -79,6 +79,87 @@
  
  struct kmem_cache *skbuff_head_cache __read_mostly;
  static struct kmem_cache *skbuff_fclone_cache __read_mostly;
@@ -1369,6 +1383,7 @@ index 7b84330..75722d1 100644
 +}
 +EXPORT_SYMBOL(skb_restore_cb);
 +
++static void skb_copy_stored_cb(struct sk_buff *   , const struct sk_buff *     ) __attribute__ ((unused));
 +static void skb_copy_stored_cb(struct sk_buff *new, const struct sk_buff *__old)
 +{
 +	struct skb_cb_table *next;
@@ -1393,7 +1408,7 @@ index 7b84330..75722d1 100644
  
  /**
   *	skb_panic - private function for out-of-line support
-@@ -643,6 +723,28 @@ static void skb_release_head_state(struct sk_buff *skb)
+@@ -643,6 +724,28 @@ static void skb_release_head_state(struct sk_buff *skb)
  		WARN_ON(in_irq());
  		skb->destructor(skb);
  	}
@@ -1405,7 +1420,7 @@ index 7b84330..75722d1 100644
 +	while (skb->cb_next != NULL) {
 +		if (net_ratelimit())
 +			pr_warn("IMQ: kfree_skb: skb->cb_next: %08x\n",
-+				(unsigned int)skb->cb_next);
++				(unsigned int)(uintptr_t)skb->cb_next);
 +
 +		skb_restore_cb(skb);
 +	}
@@ -1422,7 +1437,7 @@ index 7b84330..75722d1 100644
  #if IS_ENABLED(CONFIG_NF_CONNTRACK)
  	nf_conntrack_put(skb->nfct);
  #endif
-@@ -765,6 +867,10 @@ static void __copy_skb_header(struct sk_buff *new, const struct sk_buff *old)
+@@ -765,6 +868,10 @@ static void __copy_skb_header(struct sk_buff *new, const struct sk_buff *old)
  	new->sp			= secpath_get(old->sp);
  #endif
  	__nf_copy(new, old, false);
@@ -1433,7 +1448,7 @@ index 7b84330..75722d1 100644
  
  	/* Note : this field could be in headers_start/headers_end section
  	 * It is not yet because we do not want to have a 16 bit hole
-@@ -3324,6 +3430,13 @@ void __init skb_init(void)
+@@ -3324,6 +3431,13 @@ void __init skb_init(void)
  						0,
  						SLAB_HWCACHE_ALIGN|SLAB_PANIC,
  						NULL);
