@@ -1147,7 +1147,7 @@ index 0000000..198ac01
 +#endif /* _IP6T_IMQ_H */
 +
 diff --git a/include/linux/skbuff.h b/include/linux/skbuff.h
-index f15154a..d76d31a 100644
+index 4307e20..ebfe3f9 100644
 --- a/include/linux/skbuff.h
 +++ b/include/linux/skbuff.h
 @@ -35,6 +35,9 @@
@@ -1203,7 +1203,7 @@ index f15154a..d76d31a 100644
  extern struct kmem_cache *skbuff_head_cache;
  
  void kfree_skb_partial(struct sk_buff *skb, bool head_stolen);
-@@ -3216,6 +3234,10 @@ static inline void __nf_copy(struct sk_buff *dst, const struct sk_buff *src,
+@@ -3215,6 +3233,10 @@ static inline void __nf_copy(struct sk_buff *dst, const struct sk_buff *src,
  	if (copy)
  		dst->nfctinfo = src->nfctinfo;
  #endif
@@ -1215,10 +1215,10 @@ index f15154a..d76d31a 100644
  	dst->nf_bridge  = src->nf_bridge;
  	nf_bridge_get(src->nf_bridge);
 diff --git a/include/net/netfilter/nf_queue.h b/include/net/netfilter/nf_queue.h
-index d81d584..1adc20d 100644
+index e863585..40904cb 100644
 --- a/include/net/netfilter/nf_queue.h
 +++ b/include/net/netfilter/nf_queue.h
-@@ -29,6 +29,12 @@ struct nf_queue_handler {
+@@ -31,6 +31,12 @@ struct nf_queue_handler {
  void nf_register_queue_handler(const struct nf_queue_handler *qh);
  void nf_unregister_queue_handler(void);
  void nf_reinject(struct nf_queue_entry *entry, unsigned int verdict);
@@ -1259,7 +1259,7 @@ index ef1b1f8..079e5ff 100644
  /* we overload the higher bits for encoding auxiliary data such as the queue
   * number or errno values. Not nice, but better than additional function
 diff --git a/net/core/dev.c b/net/core/dev.c
-index aa82f9a..c931d04 100644
+index a42b232..259883b 100644
 --- a/net/core/dev.c
 +++ b/net/core/dev.c
 @@ -135,6 +135,9 @@
@@ -1272,7 +1272,7 @@ index aa82f9a..c931d04 100644
  
  #include "net-sysfs.h"
  
-@@ -2646,7 +2649,12 @@ static int xmit_one(struct sk_buff *skb, struct net_device *dev,
+@@ -2642,7 +2645,12 @@ static int xmit_one(struct sk_buff *skb, struct net_device *dev,
  	unsigned int len;
  	int rc;
  
@@ -1285,7 +1285,7 @@ index aa82f9a..c931d04 100644
  		dev_queue_xmit_nit(skb, dev);
  
  	len = skb->len;
-@@ -2684,6 +2692,7 @@ out:
+@@ -2680,6 +2688,7 @@ out:
  	*ret = rc;
  	return skb;
  }
@@ -1293,7 +1293,7 @@ index aa82f9a..c931d04 100644
  
  static struct sk_buff *validate_xmit_vlan(struct sk_buff *skb,
  					  netdev_features_t features)
-@@ -2772,6 +2781,7 @@ struct sk_buff *validate_xmit_skb_list(struct sk_buff *skb, struct net_device *d
+@@ -2768,6 +2777,7 @@ struct sk_buff *validate_xmit_skb_list(struct sk_buff *skb, struct net_device *d
  	}
  	return head;
  }
@@ -1302,7 +1302,7 @@ index aa82f9a..c931d04 100644
  static void qdisc_pkt_len_init(struct sk_buff *skb)
  {
 diff --git a/net/core/skbuff.c b/net/core/skbuff.c
-index 41ec022..307f02d 100644
+index 075d2e7..f19a692 100644
 --- a/net/core/skbuff.c
 +++ b/net/core/skbuff.c
 @@ -79,6 +79,87 @@
@@ -1393,7 +1393,7 @@ index 41ec022..307f02d 100644
  
  /**
   *	skb_panic - private function for out-of-line support
-@@ -691,6 +772,28 @@
+@@ -691,6 +772,28 @@ static void skb_release_head_state(struct sk_buff *skb)
  		WARN_ON(in_irq());
  		skb->destructor(skb);
  	}
@@ -1422,7 +1422,7 @@ index 41ec022..307f02d 100644
  #if IS_ENABLED(CONFIG_NF_CONNTRACK)
  	nf_conntrack_put(skb->nfct);
  #endif
-@@ -813,6 +916,10 @@
+@@ -813,6 +916,10 @@ static void __copy_skb_header(struct sk_buff *new, const struct sk_buff *old)
  	new->sp			= secpath_get(old->sp);
  #endif
  	__nf_copy(new, old, false);
@@ -1433,7 +1433,7 @@ index 41ec022..307f02d 100644
  
  	/* Note : this field could be in headers_start/headers_end section
  	 * It is not yet because we do not want to have a 16 bit hole
-@@ -3342,6 +3449,13 @@
+@@ -3343,6 +3450,13 @@ void __init skb_init(void)
  						0,
  						SLAB_HWCACHE_ALIGN|SLAB_PANIC,
  						NULL);
@@ -1511,10 +1511,10 @@ index a87d8b8..d1080ff 100644
  obj-$(CONFIG_NETFILTER_XT_TARGET_LOG) += xt_LOG.o
  obj-$(CONFIG_NETFILTER_XT_TARGET_NETMAP) += xt_NETMAP.o
 diff --git a/net/netfilter/core.c b/net/netfilter/core.c
-index e616301..302798c 100644
+index 5d0c6fd..42d1c21 100644
 --- a/net/netfilter/core.c
 +++ b/net/netfilter/core.c
-@@ -178,9 +178,11 @@ next_hook:
+@@ -179,9 +179,11 @@ next_hook:
  		ret = NF_DROP_GETERR(verdict);
  		if (ret == 0)
  			ret = -EPERM;
@@ -1529,7 +1529,7 @@ index e616301..302798c 100644
  			if (err == -ECANCELED)
  				goto next_hook;
 diff --git a/net/netfilter/nf_internals.h b/net/netfilter/nf_internals.h
-index ea7f367..06fe0d6 100644
+index 3992106..35cbc7b 100644
 --- a/net/netfilter/nf_internals.h
 +++ b/net/netfilter/nf_internals.h
 @@ -18,7 +18,7 @@ unsigned int nf_iterate(struct list_head *head, struct sk_buff *skb,
@@ -1538,11 +1538,11 @@ index ea7f367..06fe0d6 100644
  int nf_queue(struct sk_buff *skb, struct nf_hook_ops *elem,
 -	     struct nf_hook_state *state, unsigned int queuenum);
 +	     struct nf_hook_state *state, unsigned int queuenum, unsigned int queuetype);
+ void nf_queue_nf_hook_drop(struct nf_hook_ops *ops);
  int __init netfilter_queue_init(void);
  
- /* nf_log.c */
 diff --git a/net/netfilter/nf_queue.c b/net/netfilter/nf_queue.c
-index 2e88032..8524715 100644
+index cd60d39..2b0987d 100644
 --- a/net/netfilter/nf_queue.c
 +++ b/net/netfilter/nf_queue.c
 @@ -28,6 +28,23 @@
@@ -1569,7 +1569,7 @@ index 2e88032..8524715 100644
  /* return EBUSY when somebody else is registered, return EEXIST if the
   * same handler is registered, return 0 in case of success. */
  void nf_register_queue_handler(const struct nf_queue_handler *qh)
-@@ -112,7 +129,8 @@ EXPORT_SYMBOL_GPL(nf_queue_entry_get_refs);
+@@ -129,7 +146,8 @@ void nf_queue_nf_hook_drop(struct nf_hook_ops *ops)
  int nf_queue(struct sk_buff *skb,
  	     struct nf_hook_ops *elem,
  	     struct nf_hook_state *state,
@@ -1579,7 +1579,7 @@ index 2e88032..8524715 100644
  {
  	int status = -ENOENT;
  	struct nf_queue_entry *entry = NULL;
-@@ -122,7 +140,17 @@ int nf_queue(struct sk_buff *skb,
+@@ -139,7 +157,17 @@ int nf_queue(struct sk_buff *skb,
  	/* QUEUE == DROP if no one is waiting, to be safe. */
  	rcu_read_lock();
  
@@ -1598,7 +1598,7 @@ index 2e88032..8524715 100644
  	if (!qh) {
  		status = -ESRCH;
  		goto err_unlock;
-@@ -208,8 +236,10 @@ void nf_reinject(struct nf_queue_entry *entry, unsigned int verdict)
+@@ -225,8 +253,10 @@ void nf_reinject(struct nf_queue_entry *entry, unsigned int verdict)
  		local_bh_enable();
  		break;
  	case NF_QUEUE:
