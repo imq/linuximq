@@ -142,10 +142,10 @@ index c12cb22..03b82c6 100644
  obj-$(CONFIG_MII) += mii.o
 diff --git a/drivers/net/imq.c b/drivers/net/imq.c
 new file mode 100644
-index 0000000..c60929b
+index 0000000..ea88a6d
 --- /dev/null
 +++ b/drivers/net/imq.c
-@@ -0,0 +1,908 @@
+@@ -0,0 +1,914 @@
 +/*
 + *             Pseudo-driver for the intermediate queue device.
 + *
@@ -252,7 +252,7 @@ index 0000000..c60929b
 +static struct net_device *imq_devs_cache[IMQ_MAX_DEVS];
 +
 +#define IMQ_MAX_QUEUES 32
-+static int numqueues = 1;
++static int numqueues = 0;
 +static u32 imq_hashrnd;
 +static int imq_dev_accurate_stats = 1;
 +
@@ -957,6 +957,12 @@ index 0000000..c60929b
 +		return -EINVAL;
 +	}
 +
++	if (!numqueues) {
++		numqueues = num_online_cpus();
++		pr_info("IMQ: No specify the numqueues. Use the cores number %d as numqueuues\n", 
++				numqueues);
++	}
++
 +	if (numqueues < 1 || numqueues > IMQ_MAX_QUEUES) {
 +		pr_err("IMQ: numqueues has to be betweed 1 and %u\n",
 +		       IMQ_MAX_QUEUES);
@@ -1047,7 +1053,7 @@ index 0000000..c60929b
 +module_param(numqueues, int, 0);
 +module_param(imq_dev_accurate_stats, int, 0);
 +MODULE_PARM_DESC(numdevs, "number of IMQ devices (how many imq* devices will be created)");
-+MODULE_PARM_DESC(numqueues, "number of queues per IMQ device");
++MODULE_PARM_DESC(numqueues, "number of queues per IMQ device. Use cores number if no specify");
 +MODULE_PARM_DESC(imq_dev_accurate_stats, "Notify if need the accurate imq device stats");
 +
 +MODULE_AUTHOR("http://https://github.com/imq/linuximq");
@@ -1145,7 +1151,7 @@ index 0000000..198ac01
 +#endif /* _IP6T_IMQ_H */
 +
 diff --git a/include/linux/skbuff.h b/include/linux/skbuff.h
-index 9b88536..61686b0 100644
+index 2751588..95a9b23 100644
 --- a/include/linux/skbuff.h
 +++ b/include/linux/skbuff.h
 @@ -37,6 +37,9 @@
@@ -1201,7 +1207,7 @@ index 9b88536..61686b0 100644
  extern struct kmem_cache *skbuff_head_cache;
  
  void kfree_skb_partial(struct sk_buff *skb, bool head_stolen);
-@@ -3232,6 +3250,10 @@ static inline void __nf_copy(struct sk_buff *dst, const struct sk_buff *src,
+@@ -3235,6 +3253,10 @@ static inline void __nf_copy(struct sk_buff *dst, const struct sk_buff *src,
  	if (copy)
  		dst->nfctinfo = src->nfctinfo;
  #endif
@@ -1317,7 +1323,7 @@ index a8e4dd4..f84cd5a 100644
  static void qdisc_pkt_len_init(struct sk_buff *skb)
  {
 diff --git a/net/core/skbuff.c b/net/core/skbuff.c
-index 7b84330..a313d22 100644
+index 7bfa187..7363d41 100644
 --- a/net/core/skbuff.c
 +++ b/net/core/skbuff.c
 @@ -79,6 +79,87 @@
@@ -1448,7 +1454,7 @@ index 7b84330..a313d22 100644
  
  	/* Note : this field could be in headers_start/headers_end section
  	 * It is not yet because we do not want to have a 16 bit hole
-@@ -3324,6 +3431,13 @@ void __init skb_init(void)
+@@ -3325,6 +3432,13 @@ void __init skb_init(void)
  						0,
  						SLAB_HWCACHE_ALIGN|SLAB_PANIC,
  						NULL);
