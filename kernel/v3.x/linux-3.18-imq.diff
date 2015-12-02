@@ -142,10 +142,10 @@ index 61aefdd..41be5b8 100644
  obj-$(CONFIG_MII) += mii.o
 diff --git a/drivers/net/imq.c b/drivers/net/imq.c
 new file mode 100644
-index 0000000..5ef5882
+index 0000000..5973697
 --- /dev/null
 +++ b/drivers/net/imq.c
-@@ -0,0 +1,899 @@
+@@ -0,0 +1,905 @@
 +/*
 + *             Pseudo-driver for the intermediate queue device.
 + *
@@ -252,7 +252,7 @@ index 0000000..5ef5882
 +static struct net_device *imq_devs_cache[IMQ_MAX_DEVS];
 +
 +#define IMQ_MAX_QUEUES 32
-+static int numqueues = 1;
++static int numqueues = 0;
 +static u32 imq_hashrnd;
 +static int imq_dev_accurate_stats = 1;
 +
@@ -950,6 +950,12 @@ index 0000000..5ef5882
 +		       IMQ_MAX_DEVS);
 +		return -EINVAL;
 +	}
++	
++	if (!numqueues) {
++		numqueues = num_online_cpus();
++		pr_info("IMQ: No specify the numqueues. Use the cores number %d as numqueuues\n",
++			numqueues);
++	}
 +
 +	if (numqueues < 1 || numqueues > IMQ_MAX_QUEUES) {
 +		pr_err("IMQ: numqueues has to be betweed 1 and %u\n",
@@ -1043,7 +1049,7 @@ index 0000000..5ef5882
 +module_param(numqueues, int, 0);
 +module_param(imq_dev_accurate_stats, int, 0);
 +MODULE_PARM_DESC(numdevs, "number of IMQ devices (how many imq* devices will be created)");
-+MODULE_PARM_DESC(numqueues, "number of queues per IMQ device");
++MODULE_PARM_DESC(numqueues, "number of queues per IMQ device. Use cores number if no specify");
 +MODULE_PARM_DESC(imq_dev_accurate_stats, "Notify if need the accurate imq device stats");
 diff --git a/include/linux/imq.h b/include/linux/imq.h
 new file mode 100644
@@ -1065,10 +1071,10 @@ index 0000000..1babb09
 +#endif /* _IMQ_H */
 +
 diff --git a/include/linux/netdevice.h b/include/linux/netdevice.h
-index c3fd34d..6f71f6c 100644
+index 70fde9c..2052fcd 100644
 --- a/include/linux/netdevice.h
 +++ b/include/linux/netdevice.h
-@@ -3172,6 +3172,18 @@ static inline void netif_tx_unlock_bh(struct net_device *dev)
+@@ -3180,6 +3180,18 @@ static inline void netif_tx_unlock_bh(struct net_device *dev)
  	}						\
  }
  
