@@ -962,7 +962,7 @@ index 0000000..198ac01
 +#endif /* _IP6T_IMQ_H */
 +
 diff --git a/include/linux/skbuff.h b/include/linux/skbuff.h
-index 1b4ea29..2e4341d 100644
+index d9c4a60..4335a6b 100644
 --- a/include/linux/skbuff.h
 +++ b/include/linux/skbuff.h
 @@ -30,6 +30,9 @@
@@ -1019,7 +1019,7 @@ index 1b4ea29..2e4341d 100644
  extern void kfree_skb(struct sk_buff *skb);
  extern void consume_skb(struct sk_buff *skb);
  extern void	       __kfree_skb(struct sk_buff *skb);
-@@ -2429,6 +2448,10 @@ static inline void __nf_copy(struct sk_buff *dst, const struct sk_buff *src)
+@@ -2432,6 +2451,10 @@ static inline void __nf_copy(struct sk_buff *dst, const struct sk_buff *src)
  	dst->nfct_reasm = src->nfct_reasm;
  	nf_conntrack_get_reasm(src->nfct_reasm);
  #endif
@@ -1047,7 +1047,7 @@ index 252fd10..b1c2483 100644
  
  #endif /* _NF_QUEUE_H */
 diff --git a/net/core/dev.c b/net/core/dev.c
-index 1c0d862..0e8a534 100644
+index ec29958..04bffae 100644
 --- a/net/core/dev.c
 +++ b/net/core/dev.c
 @@ -98,6 +98,9 @@
@@ -1074,20 +1074,26 @@ index 1c0d862..0e8a534 100644
  
  		features = netif_skb_features(skb);
 diff --git a/net/core/skbuff.c b/net/core/skbuff.c
-index 7121d9b..565fb8c 100644
+index b30d9c2..069bc6c 100644
 --- a/net/core/skbuff.c
 +++ b/net/core/skbuff.c
-@@ -75,6 +75,9 @@
+@@ -75,6 +75,15 @@
  
  static struct kmem_cache *skbuff_head_cache __read_mostly;
  static struct kmem_cache *skbuff_fclone_cache __read_mostly;
 +#if defined(CONFIG_IMQ) || defined(CONFIG_IMQ_MODULE)
 +static struct kmem_cache *skbuff_cb_store_cache __read_mostly;
++static void skb_copy_stored_cb(struct sk_buff *new, const struct sk_buff *__old);
++struct skb_cb_table {
++    char            cb[48] __aligned(8);
++    void            *cb_next;
++    atomic_t        refcnt;
++};
 +#endif
  
  /*
   *	Keep out-of-line to prevent kernel bloat.
-@@ -375,6 +378,26 @@ static void skb_release_head_state(struct sk_buff *skb)
+@@ -375,6 +384,26 @@ static void skb_release_head_state(struct sk_buff *skb)
  		WARN_ON(in_irq());
  		skb->destructor(skb);
  	}
@@ -1097,7 +1103,7 @@ index 7121d9b..565fb8c 100644
 +	while (skb->cb_next != NULL) {
 +		if (net_ratelimit())
 +			printk(KERN_WARNING "IMQ: kfree_skb: skb->cb_next: "
-+				"%08x\n", (unsigned int)skb->cb_next);
++				"%p\n", skb->cb_next);
 +
 +		skb_restore_cb(skb);
 +	}	
@@ -1114,7 +1120,7 @@ index 7121d9b..565fb8c 100644
  #if defined(CONFIG_NF_CONNTRACK) || defined(CONFIG_NF_CONNTRACK_MODULE)
  	nf_conntrack_put(skb->nfct);
  #endif
-@@ -519,6 +542,9 @@ static void __copy_skb_header(struct sk_buff *new, const struct sk_buff *old)
+@@ -519,6 +548,9 @@ static void __copy_skb_header(struct sk_buff *new, const struct sk_buff *old)
  	new->sp			= secpath_get(old->sp);
  #endif
  	memcpy(new->cb, old->cb, sizeof(old->cb));
@@ -1124,7 +1130,7 @@ index 7121d9b..565fb8c 100644
  	new->csum		= old->csum;
  	new->local_df		= old->local_df;
  	new->pkt_type		= old->pkt_type;
-@@ -2884,6 +2910,13 @@ void __init skb_init(void)
+@@ -2885,6 +2917,13 @@ void __init skb_init(void)
  						0,
  						SLAB_HWCACHE_ALIGN|SLAB_PANIC,
  						NULL);
@@ -1138,18 +1144,11 @@ index 7121d9b..565fb8c 100644
  }
  
  /**
-@@ -3148,6 +3181,82 @@ void skb_tstamp_tx(struct sk_buff *orig_skb,
+@@ -3149,6 +3188,75 @@ void skb_tstamp_tx(struct sk_buff *orig_skb,
  }
  EXPORT_SYMBOL_GPL(skb_tstamp_tx);
  
 +#if defined(CONFIG_IMQ) || defined(CONFIG_IMQ_MODULE)
-+/* Control buffer save/restore for IMQ devices */
-+struct skb_cb_table {
-+	char			cb[48] __aligned(8);
-+	void			*cb_next;
-+	atomic_t		refcnt;
-+};
-+
 +static DEFINE_SPINLOCK(skb_cb_store_lock);
 +
 +int skb_save_cb(struct sk_buff *skb)
