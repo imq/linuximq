@@ -1,0 +1,57 @@
+The Intermediate queueing device (IMQ)
+
+The Intermediate queueing device is not a qdisc but its usage is tightly bound to qdiscs. Within linux, qdiscs are attached to network devices and everything that is queued to the device is first queued to the qdisc. From this concept, two limitations arise:
+
+
+1.Only egress shaping is possible (an ingress qdisc exists, but its possibilities are very limited compared to classful qdiscs).
+
+
+2.A qdisc can only see traffic of one interface, global limitations can't be placed.
+
+
+IMQ is there to help solve those two limitations. In short, you can put everything you choose in a qdisc. Specially marked packets get intercepted in netfilter NF_IP_PRE_ROUTING and NF_IP_POST_ROUTING hooks and pass through the qdisc attached to an imq device. An iptables target is used for marking the packets.
+
+This enables you to do ingress shaping as you can just mark packets coming in from somewhere and/or treat interfaces as classes to set global limits. You can also do lots of other stuff like just putting your http traffic in a qdisc, put new connection requests in a qdisc, ...
+
+
+Sample configuration
+
+The first thing that might come to mind is use ingress shaping to give yourself a high guaranteed bandwidth. ;) Configuration is just like with any other interface: 
+tc qdisc add dev imq0 root handle 1: htb default 20
+
+tc class add dev imq0 parent 1: classid 1:1 htb rate 2mbit burst 15k
+
+tc class add dev imq0 parent 1:1 classid 1:10 htb rate 1mbit
+tc class add dev imq0 parent 1:1 classid 1:20 htb rate 1mbit
+
+tc qdisc add dev imq0 parent 1:10 handle 10: pfifo
+tc qdisc add dev imq0 parent 1:20 handle 20: sfq
+
+tc filter add dev imq0 parent 10:0 protocol ip prio 1 u32 match \
+		ip dst 10.0.0.230/32 flowid 1:10
+In this example u32 is used for classification. Other classifiers should work as expected. Next traffic has to be selected and marked to be enqueued to imq0. iptables -t mangle -A PREROUTING -i eth0 -j IMQ --todev 0
+
+ip link set imq0 up
+
+
+The IMQ iptables targets is valid in the PREROUTING and POSTROUTING chains of the mangle table. It's syntax is 
+IMQ [ --todev n ]	n : number of imq device
+An ip6tables target is also provided.
+
+Please note traffic is not enqueued when the target is hit but afterwards. The exact location where traffic enters the imq device depends on the direction of the traffic (in/out). These are the predefined netfilter hooks used by iptables: 
+enum nf_ip_hook_priorities {
+        NF_IP_PRI_FIRST = INT_MIN,
+        NF_IP_PRI_CONNTRACK = -200,
+        NF_IP_PRI_MANGLE = -150,
+        NF_IP_PRI_NAT_DST = -100,
+        NF_IP_PRI_FILTER = 0,
+        NF_IP_PRI_NAT_SRC = 100,
+        NF_IP_PRI_LAST = INT_MAX,
+};
+
+
+For ingress traffic, imq registers itself with NF_IP_PRI_MANGLE + 1 priority which means packets enter the imq device directly after the mangle PREROUTING chain has been passed.
+
+For egress imq uses NF_IP_PRI_LAST which honours the fact that packets dropped by the filter table won't occupy bandwidth.
+
+
