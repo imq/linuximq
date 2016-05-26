@@ -1,11 +1,5 @@
-Pseudo-driver for the intermediate queue device.
-------------------------------------------------
-
-
-This program is free software; 
-You can redistribute it and/or modify it under the terms of the 
-GNU General Public License as published by the Free Software Foundation;  
-either version 2 of the License, or (at your option) any later version.
+Pseudo-driver for the intermediate queue device. (IMQ)
+------------------------------------------------------
 
 
 The imq device has two common usage cases:
@@ -23,5 +17,11 @@ The imq device has two common usage cases:
 	With IMQ you can use iptables to specify which packets the qdiscs sees, 
 	so global limits can be placed.
 
+
+
+This program is free software.
+
+You can redistribute it and/or modify it under the terms of the GNU General Public License 
+as published by the Free Software Foundation either version 2 of the License, or (at your option) any later version.
 
 
