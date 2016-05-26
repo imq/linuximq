@@ -1,5 +1,5 @@
-Pseudo-driver for the intermediate queue device 
-===============================================
+Pseudo-driver for the intermediate queue device.
+------------------------------------------------
 
 
 This program is free software; 
