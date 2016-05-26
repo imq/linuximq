@@ -1,1 +1,1 @@
-Place to add more documentation about IMQ
+Place to add examples, documentations about IMQ
