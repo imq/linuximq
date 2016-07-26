@@ -1,5 +1,29 @@
 IMQ changelog:
 --------------
+2016-07-26
+----------
+		Patch for kernel 4.7
+
+2016-06-12
+----------
+		Patch for kernel 4.6
+
+2016-03-30
+----------
+		Patch for kernel 4.4 and 4.4.5
+
+2015-12-26
+----------
+		Patch for kernel 4.4
+
+2015-09-29
+----------
+		Patch for kernel 4.3
+
+2015-08-12
+----------
+		Patch for kernel 4.2
+
 2015-06-25
 ----------
 		Feng Gao add one new parameter of IMQ module(3.18,4.0,and 4.1), imq_dev_accurate_stats (default is 1).
