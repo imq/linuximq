@@ -1,5 +1,6 @@
 IPTABLES changelog:
 -------------------
+Patch for iptables 1.6.0 (2016-05-17)
 Patch for iptables 1.4.13.x, 1.4.14.x and 1.4.15.x
 Patch for iptables 1.4.12.x (by Adrian Ban)
 Patch for iptables 1.4.10 (by Adrian Ban)
