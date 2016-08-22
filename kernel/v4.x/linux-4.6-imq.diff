@@ -1525,7 +1525,7 @@ diff --git a/net/netfilter/core.c b/net/netfilter/core.c
 index f39276d..9877a27 100644
 --- a/net/netfilter/core.c
 +++ b/net/netfilter/core.c
-@@ -311,9 +311,11 @@ next_hook:
+@@ -311,10 +311,14 @@ next_hook:
  		ret = NF_DROP_GETERR(verdict);
  		if (ret == 0)
  			ret = -EPERM;
@@ -1537,8 +1537,11 @@ index f39276d..9877a27 100644
 +				   verdict >> NF_VERDICT_QBITS,
 +				  verdict & NF_VERDICT_MASK);
  		if (err < 0) {
++			if (err == -ECANCELED)
++				goto next_hook;
  			if (err == -ESRCH &&
  			   (verdict & NF_VERDICT_FLAG_QUEUE_BYPASS))
+ 				goto next_hook;
 diff --git a/net/netfilter/nf_internals.h b/net/netfilter/nf_internals.h
 index 0655225..25d4141 100644
 --- a/net/netfilter/nf_internals.h
@@ -1580,7 +1583,7 @@ index 5baa8e2..9740e8c 100644
  /* return EBUSY when somebody else is registered, return EEXIST if the
   * same handler is registered, return 0 in case of success. */
  void nf_register_queue_handler(const struct nf_queue_handler *qh)
-@@ -116,7 +133,8 @@ void nf_queue_nf_hook_drop(struct net *net, struct nf_hook_ops *ops)
+@@ -116,7 +133,8 @@ void nf_queue_nf_hook_drop(struct net *n
  int nf_queue(struct sk_buff *skb,
  	     struct nf_hook_ops *elem,
  	     struct nf_hook_state *state,
@@ -1609,7 +1612,7 @@ index 5baa8e2..9740e8c 100644
  	if (!qh) {
  		status = -ESRCH;
  		goto err;
-@@ -199,8 +227,10 @@ void nf_reinject(struct nf_queue_entry *entry, unsigned int verdict)
+@@ -199,9 +227,13 @@ void nf_reinject(struct nf_queue_entry *
  		local_bh_enable();
  		break;
  	case NF_QUEUE:
@@ -1619,8 +1622,11 @@ index 5baa8e2..9740e8c 100644
 +			       verdict >> NF_VERDICT_QBITS,
 +				   verdict & NF_VERDICT_MASK);
  		if (err < 0) {
++			if (err == -ECANCELED)
++				goto next_hook;
  			if (err == -ESRCH &&
  			   (verdict & NF_VERDICT_FLAG_QUEUE_BYPASS))
+ 				goto next_hook;
 diff --git a/net/netfilter/xt_IMQ.c b/net/netfilter/xt_IMQ.c
 new file mode 100644
 index 0000000..86d7b84
