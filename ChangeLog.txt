@@ -1,5 +1,9 @@
 IMQ changelog:
 --------------
+2016-11-17
+----------
+		Patch for kernel 4.8.8
+
 2016-10-03
 ----------
 		Patch for kernel 4.8
