@@ -1144,7 +1144,7 @@ index 0000000..198ac01
 +#endif /* _IP6T_IMQ_H */
 +
 diff --git a/include/linux/skbuff.h b/include/linux/skbuff.h
-index 32810f2..4ce1d0a 100644
+index c8f9fa6..6c425c2 100644
 --- a/include/linux/skbuff.h
 +++ b/include/linux/skbuff.h
 @@ -39,6 +39,10 @@
@@ -1311,7 +1311,7 @@ index 6666b28..3e12add 100644
  					  netdev_features_t features)
  {
 diff --git a/net/core/skbuff.c b/net/core/skbuff.c
-index 1e3e008..379236e 100644
+index 9bf1289..e3fcf17 100644
 --- a/net/core/skbuff.c
 +++ b/net/core/skbuff.c
 @@ -82,6 +82,87 @@ struct kmem_cache *skbuff_head_cache __read_mostly;
@@ -1442,7 +1442,7 @@ index 1e3e008..379236e 100644
  
  	/* Note : this field could be in headers_start/headers_end section
  	 * It is not yet because we do not want to have a 16 bit hole
-@@ -3463,6 +3570,13 @@ void __init skb_init(void)
+@@ -3464,6 +3571,13 @@ void __init skb_init(void)
  						0,
  						SLAB_HWCACHE_ALIGN|SLAB_PANIC,
  						NULL);
@@ -1485,10 +1485,10 @@ index 59eb4ed..8020b07 100644
  			    net, sk, skb, NULL, dev,
  			    ip6_finish_output,
 diff --git a/net/netfilter/Kconfig b/net/netfilter/Kconfig
-index e8d56d9..1ed3468 100644
+index 4a2e5a3..fc5cc9a 100644
 --- a/net/netfilter/Kconfig
 +++ b/net/netfilter/Kconfig
-@@ -823,6 +823,18 @@ config NETFILTER_XT_TARGET_LOG
+@@ -833,6 +833,18 @@ config NETFILTER_XT_TARGET_LOG
  
  	  To compile it as a module, choose M here.  If unsure, say N.
  
@@ -1508,7 +1508,7 @@ index e8d56d9..1ed3468 100644
  	tristate '"MARK" target support'
  	depends on NETFILTER_ADVANCED
 diff --git a/net/netfilter/Makefile b/net/netfilter/Makefile
-index c23c3c8..99911ef 100644
+index e5c5e1e..3128bc5 100644
 --- a/net/netfilter/Makefile
 +++ b/net/netfilter/Makefile
 @@ -119,6 +119,7 @@ obj-$(CONFIG_NETFILTER_XT_TARGET_CT) += xt_CT.o
@@ -1537,7 +1537,7 @@ index 004af03..768a08b 100644
  			goto next_hook;
  	}
 diff --git a/net/netfilter/nf_queue.c b/net/netfilter/nf_queue.c
-index 8f08d75..8d362c0 100644
+index 8f08d75..c12c9eb 100644
 --- a/net/netfilter/nf_queue.c
 +++ b/net/netfilter/nf_queue.c
 @@ -27,6 +27,23 @@
@@ -1595,7 +1595,23 @@ index 8f08d75..8d362c0 100644
  	if (!qh) {
  		status = -ESRCH;
  		goto err;
-@@ -218,6 +247,7 @@ void nf_reinject(struct nf_queue_entry *entry, unsigned int verdict)
+@@ -164,8 +193,14 @@ int nf_queue(struct sk_buff *skb, struct nf_hook_state *state,
+ 	int ret;
+ 
+ 	RCU_INIT_POINTER(state->hook_entries, entry);
+-	ret = __nf_queue(skb, state, verdict >> NF_VERDICT_QBITS);
++	ret = __nf_queue(skb, state, verdict);
+ 	if (ret < 0) {
++#if defined(CONFIG_IMQ) || defined(CONFIG_IMQ_MODULE)
++		if (ret == -ECANCELED && skb->imq_flags == 0) { // down interface
++			*entryp = rcu_dereference(entry->next);
++			return 1;
++		}
++#endif
+ 		if (ret == -ESRCH &&
+ 		    (verdict & NF_VERDICT_FLAG_QUEUE_BYPASS)) {
+ 			*entryp = rcu_dereference(entry->next);
+@@ -218,6 +253,7 @@ void nf_reinject(struct nf_queue_entry *entry, unsigned int verdict)
  		local_bh_enable();
  		break;
  	case NF_QUEUE:
