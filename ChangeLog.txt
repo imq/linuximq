@@ -1,5 +1,9 @@
 IMQ changelog:
 --------------
+2017-09-04
+----------
+		Patch for kernel 4.13
+
 2017-07-04
 ----------
 		Patch for kernel 4.12
