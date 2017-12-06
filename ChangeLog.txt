@@ -1,5 +1,9 @@
 IMQ changelog:
 --------------
+2017-12-06
+----------
+    Removed unused directories from the repo.
+
 2017-11-20
 ----------
 		Patch for kernel 4.14
