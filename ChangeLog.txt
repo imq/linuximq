@@ -1,8 +1,12 @@
 IMQ changelog:
 --------------
+2018-04-01
+----------
+		Patch for kernel 4.16
+
 2017-12-06
 ----------
-    Removed unused directories from the repo.
+		Removed unused directories from the repo.
 
 2017-11-20
 ----------
