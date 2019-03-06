@@ -1,5 +1,9 @@
 IMQ changelog:
 --------------
+2019-03-04
+----------
+		Patch for kernel 5.0
+
 2018-12-28
 ----------
 		Patch for kernel 4.20
