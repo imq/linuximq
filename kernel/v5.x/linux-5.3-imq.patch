@@ -1729,3 +1729,4 @@ diff -purN linux-5.3.orig/net/sched/sch_generic.c linux-5.3/net/sched/sch_generi
  /*
   * Transmit possibly several skbs, and handle the return status as
   * required. Owning running seqcount bit guarantees that
+  */
