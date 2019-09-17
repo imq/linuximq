@@ -1,5 +1,10 @@
 IMQ changelog:
 --------------
+2019-09-17
+----------
+    Patch for kernel 5.3
+
+----------
 2019-07-08
 ----------
 		Patch for kernel 5.2
