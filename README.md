@@ -8,8 +8,8 @@ Pseudo-driver for the intermediate queue device. (IMQ)
 4. [IMQ Traveling Diagram](https://github.com/imq/linuximq/wiki/IMQ-traversal) 
 5. [Kernel Packet Traveling Diagram](https://github.com/imq/linuximq/wiki/Kernel-Packet-Traveling-Diagram)
 6. [The Intermediate queueing device (IMQ)](https://github.com/imq/linuximq/wiki/The-Intermediate-queueing-device)
-7. [IMQ replacement with IFB (Intermediate Functional Block)](https://wiki.linuxfoundation.org/networking/ifb)
-8. [Dummy interface IMQ replacement](http://lwn.net/Articles/121407/)
+7. [Intermediate Functional Block - IFB interface (IMQ replacement)](https://wiki.linuxfoundation.org/networking/ifb)
+8. [Dummy interface - (IMQ replacement)](http://lwn.net/Articles/121407/)
 9. [FAQ](https://github.com/imq/linuximq/wiki/FAQ)
 
 
