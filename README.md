@@ -1,21 +1,17 @@
 Pseudo-driver for the intermediate queue device. (IMQ)
 ------------------------------------------------------
 
+### Contents:
+1. [What is IMQ ?](https://github.com/imq/linuximq/wiki/WhatIs)
+2. [How to use IMQ](https://github.com/imq/linuximq/wiki/UsingIMQ)
+3. [Patching Kernel/IPTABLES](https://github.com/imq/linuximq/wiki/PatchingKernel)
+4. [IMQ Traveling Diagram](https://github.com/imq/linuximq/wiki/IMQ-traversal) 
+5. [Kernel Packet Traveling Diagram (KPTD)](http://www.docum.org/docum.org/kptd/)
+6. [The Intermediate queueing device (IMQ)](https://github.com/imq/linuximq/wiki/The-Intermediate-queueing-device)
+7. [IMQ replacement with IFB (Intermediate Functional Block)](https://wiki.linuxfoundation.org/networking/ifb)
+8. [Dummy interface IMQ replacement](http://lwn.net/Articles/121407/)
+9. [FAQ](https://github.com/imq/linuximq/wiki/FAQ)
 
-The imq device has two common usage cases:
-
-
-- Ingress shaping:
-	With linux only egress shaping is possible (except for the ingress queue
-	which can only do rate limiting). 
-	IMQ enables you to use egress qdiscs for real ingress shaping.
-
-- Shaping over multiple interfaces:
-	Qdiscs get attached to devices. A consequence of this is that one qdisc can 
-	only handle traffic going to the interface it is attached to. 
-	Sometimes it is desireable to have global limits on multiple interfaces. 
-	With IMQ you can use iptables to specify which packets the qdiscs sees, 
-	so global limits can be placed.
 
 
 
