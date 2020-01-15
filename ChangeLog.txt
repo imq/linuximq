@@ -1,5 +1,9 @@
 IMQ changelog:
 --------------
+2020-01-15
+-----------
+    Removed unsed locks
+    changed net/core/skbuff.c to "spin_lock_irqsave(&skb_cb_store_lock, flags)"
 
 2019-11-26
 ----------
