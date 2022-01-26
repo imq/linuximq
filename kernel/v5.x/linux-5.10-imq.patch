@@ -142,7 +142,7 @@ index 72e18d505d1a..f3454bbe84ca 100644
  obj-$(CONFIG_MII) += mii.o
 diff --git a/drivers/net/imq.c b/drivers/net/imq.c
 new file mode 100644
-index 000000000000..3da2b45c5b5e
+index 000000000000..b44e3d27da18
 --- /dev/null
 +++ b/drivers/net/imq.c
 @@ -0,0 +1,957 @@
@@ -355,7 +355,7 @@ index 000000000000..3da2b45c5b5e
 +				swap(ports.in16[0], ports.in16[1]);
 +			break;
 +		}
-+		/* fall-through */
++		fallthrough;
 +	}
 +	default:
 +		ports.in32 = 0;
