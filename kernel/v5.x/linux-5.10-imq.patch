@@ -142,10 +142,10 @@ index 72e18d505d1a..f3454bbe84ca 100644
  obj-$(CONFIG_MII) += mii.o
 diff --git a/drivers/net/imq.c b/drivers/net/imq.c
 new file mode 100644
-index 000000000000..b44e3d27da18
+index 000000000000..595b2ac5afad
 --- /dev/null
 +++ b/drivers/net/imq.c
-@@ -0,0 +1,957 @@
+@@ -0,0 +1,956 @@
 +/*
 + *             Pseudo-driver for the intermediate queue device.
 + *
@@ -433,7 +433,6 @@ index 000000000000..b44e3d27da18
 +
 +	if (entry) {
 +		nf_queue_entry_free(entry);
-+		kfree(entry);
 +	}
 +
 +	skb_restore_cb(skb); /* kfree backup */
