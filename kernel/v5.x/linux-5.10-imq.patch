@@ -142,10 +142,10 @@ index 72e18d505d1a..f3454bbe84ca 100644
  obj-$(CONFIG_MII) += mii.o
 diff --git a/drivers/net/imq.c b/drivers/net/imq.c
 new file mode 100644
-index 000000000000..595b2ac5afad
+index 000000000000..b64241df0cf3
 --- /dev/null
 +++ b/drivers/net/imq.c
-@@ -0,0 +1,956 @@
+@@ -0,0 +1,963 @@
 +/*
 + *             Pseudo-driver for the intermediate queue device.
 + *
@@ -724,11 +724,18 @@ index 000000000000..595b2ac5afad
 +
 +	if (!skb->dev) {
 +		/* skb->dev == NULL causes problems, try the find cause. */
++		/*
++
++		Disable skb->dev == NULL warning log, happens a lot for me.
++		May be related to ipsec activation/deactivation while
++		packets in flight.
++
 +		if (net_ratelimit()) {
 +			dev_warn(&dev->dev,
 +				 "received packet with skb->dev == NULL\n");
 +			dump_stack();
 +		}
++		*/
 +
 +		skb->dev = dev;
 +	}
