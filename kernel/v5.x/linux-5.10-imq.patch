@@ -323,7 +323,7 @@
 +	unsigned int queue_index;
 +
 +	/* Don't let queue_mapping be left too large after exiting IMQ */
-+	if (likely(skb->dev != dev && skb->dev != NULL)) {
++	if (likely(skb->dev != dev && skb->dev != NULL && (skb->dev->real_num_tx_queues > 0))) {
 +		queue_index = skb_get_queue_mapping(skb);
 +		if (unlikely(queue_index >= skb->dev->real_num_tx_queues)) {
 +			queue_index = (u16)((u32)queue_index %
