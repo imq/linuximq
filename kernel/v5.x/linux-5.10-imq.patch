@@ -1,7 +1,7 @@
 ---
  drivers/net/Kconfig                     |  119 +++
  drivers/net/Makefile                    |    1 
- drivers/net/imq.c                       |  963 ++++++++++++++++++++++++++++++++
+ drivers/net/imq.c                       |  971 ++++++++++++++++++++++++++++++++
  include/linux/imq.h                     |   13 
  include/linux/netdevice.h               |   18 
  include/linux/netfilter/xt_IMQ.h        |    9 
@@ -20,11 +20,11 @@
  net/netfilter/nf_queue.c                |   44 +
  net/netfilter/xt_IMQ.c                  |   72 ++
  net/sched/sch_generic.c                 |    8 
- 21 files changed, 1412 insertions(+), 4 deletions(-)
+ 21 files changed, 1420 insertions(+), 4 deletions(-)
 
 --- /dev/null
 +++ b/drivers/net/imq.c
-@@ -0,0 +1,963 @@
+@@ -0,0 +1,971 @@
 +/*
 + *             Pseudo-driver for the intermediate queue device.
 + *
@@ -415,13 +415,21 @@
 +	return dev;
 +}
 +
-+static struct nf_queue_entry *nf_queue_entry_dup(struct nf_queue_entry *e)
++/* This nf_queue_entry_dup() function is a copy from
++ * net/netfilter/nfnetlink_queue.c, and needs to be kept in sync!
++ */
++static struct nf_queue_entry *
++nf_queue_entry_dup(struct nf_queue_entry *e)
 +{
 +	struct nf_queue_entry *entry = kmemdup(e, e->size, GFP_ATOMIC);
-+	if (entry) {
-+		nf_queue_entry_get_refs(entry);
++
++	if (!entry)
++		return NULL;
++
++	if (nf_queue_entry_get_refs(entry))
 +		return entry;
-+	}
++
++	kfree(entry);
 +	return NULL;
 +}
 +
