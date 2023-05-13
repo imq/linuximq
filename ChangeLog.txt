@@ -1,5 +1,15 @@
 IMQ changelog:
 --------------
+2023-05-12
+-----------
+
+Sven-Haegar Koch
+	Sometimes skb->dev->real_num_tx_queues can be zero, perhaps while
+	updating the shaping queues.
+	If this happens take the safe route and clear the queue mapping
+	instead of crashing the kernel.
+	Patch for kernel 6.x
+
 2020-01-15
 -----------
     Removed unsed locks
