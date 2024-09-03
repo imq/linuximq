@@ -34,7 +34,6 @@ diff -purN linux-6.11-rc3/drivers/net/imq.c linux-6.11-imq/drivers/net/imq.c
 +#include <linux/imq.h>
 +#include <net/pkt_sched.h>
 +#include <net/netfilter/nf_queue.h>
-+#include <net/netfilter/nfnetlink_queue.h>
 +#include <net/sock.h>
 +#include <linux/ip.h>
 +#include <linux/ipv6.h>
